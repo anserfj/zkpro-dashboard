@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>ZK PRO — Admin Dashboard</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
@@ -17,126 +17,60 @@
     @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
     @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
     @keyframes scaleIn{from{transform:scale(.95);opacity:0}to{transform:scale(1);opacity:1}}
+    @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
     .fade-in{animation:fadeIn .3s ease forwards}
     .scale-in{animation:scaleIn .25s ease forwards}
     .live-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#00e676;animation:pulse 2s infinite}
+    .spinner{width:20px;height:20px;border:2px solid #1e2530;border-top-color:#00e5ff;border-radius:50%;animation:spin .7s linear infinite;margin:auto}
   </style>
 </head>
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const { useState } = React;
+const { useState, useEffect, useCallback } = React;
 
-const C = {
-  bg:"#080a0e",surface:"#0f1318",card:"#141920",border:"#1e2530",
-  accent:"#00e5ff",accentDim:"#00e5ff22",accentMid:"#00e5ff55",
-  gold:"#f0b429",green:"#00e676",red:"#ff4757",orange:"#ff9f43",
-  text1:"#eef2f7",text2:"#8b9ab0",text3:"#4a5568",
-};
+// ── SUPABASE CONFIG ──────────────────────────────
+const SB_URL = "https://hyigrnuoojusixzahjvq.supabase.co";
+const SB_KEY = "sb_publishable_zvgnghWMy0byVdyrIxSafA_i52Nn2f9";
+const SB_H = { "Content-Type":"application/json", "apikey":SB_KEY, "Authorization":`Bearer ${SB_KEY}` };
 
-const MOCK_ORDERS = [
-  {id:"CMD-0041",user:"@martin_vape",date:"2025-03-10 14:32",items:[{name:"Elf Bar 600 Mix Fruits",qty:20,price:3.50},{name:"Lost Mary BM600 Raisin",qty:10,price:3.80}],total:108.00,livraison:0,status:"nouveau"},
-  {id:"CMD-0040",user:"@tabac_paris11",date:"2025-03-10 11:18",items:[{name:"Vozol Star 6000 Citron",qty:50,price:5.20},{name:"Présentoir de comptoir",qty:2,price:12.00}],total:284.00,livraison:0,status:"traité"},
-  {id:"CMD-0039",user:"@epicerie_lydia",date:"2025-03-09 17:45",items:[{name:"Tornado 7000 Pêche",qty:10,price:6.00},{name:"Pack Recharge USB-C ×50",qty:1,price:18.00}],total:78.00,livraison:9.90,status:"expédié"},
-  {id:"CMD-0038",user:"@smok_shop69",date:"2025-03-09 09:22",items:[{name:"R&M Tornado Pomme Froide",qty:30,price:5.80}],total:174.00,livraison:0,status:"traité"},
-  {id:"CMD-0037",user:"@vapestore_nice",date:"2025-03-08 16:10",items:[{name:"Carton 100 puffs mixte",qty:2,price:290.00}],total:580.00,livraison:0,status:"expédié"},
-  {id:"CMD-0036",user:"@tabac_du_port",date:"2025-03-08 10:05",items:[{name:"Elf Bar 1500 Fraise",qty:20,price:4.20}],total:84.00,livraison:0,status:"annulé"},
-  {id:"CMD-0035",user:"@buraliste_38",date:"2025-03-07 15:33",items:[{name:"Lot étiquettes prix ×200",qty:5,price:5.00},{name:"Elf Bar 600 Mix Fruits",qty:40,price:3.50}],total:165.00,livraison:0,status:"traité"},
-];
-
-const MOCK_PRODUCTS = [
-  {id:1,cat:"puff",emoji:"💨",name:"Elf Bar 600 — Mix Fruits",price:3.50,unit:"/ unité",minQty:10,badge:"top",stock:340},
-  {id:2,cat:"puff",emoji:"🍋",name:"Vozol Star 6000 — Citron",price:5.20,unit:"/ unité",minQty:10,badge:"promo",stock:210},
-  {id:3,cat:"puff",emoji:"🍇",name:"Lost Mary BM600 — Raisin",price:3.80,unit:"/ unité",minQty:10,badge:"new",stock:180},
-  {id:4,cat:"puff",emoji:"🍑",name:"Tornado 7000 — Pêche",price:6.00,unit:"/ unité",minQty:10,badge:null,stock:95},
-  {id:5,cat:"puff",emoji:"🍓",name:"Elf Bar 1500 — Fraise",price:4.20,unit:"/ unité",minQty:10,badge:"stock",stock:42},
-  {id:6,cat:"puff",emoji:"🍏",name:"R&M Tornado — Pomme Froide",price:5.80,unit:"/ unité",minQty:10,badge:null,stock:130},
-  {id:7,cat:"recharge",emoji:"🔋",name:"Pack Recharge USB-C ×50",price:18.00,unit:"/ pack",minQty:1,badge:"new",stock:60},
-  {id:8,cat:"recharge",emoji:"📦",name:"Carton 100 puffs mixte",price:290.00,unit:"/ carton",minQty:1,badge:null,stock:15},
-  {id:9,cat:"accessoire",emoji:"🏷️",name:"Présentoir de comptoir",price:12.00,unit:"/ unité",minQty:1,badge:null,stock:28},
-  {id:10,cat:"accessoire",emoji:"📋",name:"Lot étiquettes prix ×200",price:5.00,unit:"/ lot",minQty:1,badge:"promo",stock:200},
-];
-
-const STATUS_CONFIG = {
-  nouveau:{label:"Nouveau",color:C.accent,bg:C.accentDim},
-  traité:{label:"Traité",color:C.gold,bg:"#f0b42922"},
-  expédié:{label:"Expédié",color:C.green,bg:"#00e67622"},
-  annulé:{label:"Annulé",color:C.red,bg:"#ff475722"},
-};
-
-const fmt = n => n.toFixed(2).replace(".",",")+"\u00a0€";
-
-function Badge({status}){
-  const cfg=STATUS_CONFIG[status]||STATUS_CONFIG.nouveau;
-  return <span style={{display:"inline-flex",alignItems:"center",padding:"3px 10px",borderRadius:4,fontSize:11,fontWeight:600,letterSpacing:"0.06em",textTransform:"uppercase",color:cfg.color,background:cfg.bg,border:`1px solid ${cfg.color}33`}}>{cfg.label}</span>;
+async function sbGet(table, params=""){
+  const r = await fetch(`${SB_URL}/rest/v1/${table}${params}`,{headers:SB_H});
+  if(!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function sbPatch(table, id, body, idCol="id"){
+  const r = await fetch(`${SB_URL}/rest/v1/${table}?${idCol}=eq.${encodeURIComponent(id)}`,{method:"PATCH",headers:{...SB_H,"Prefer":"return=minimal"},body:JSON.stringify(body)});
+  if(!r.ok) throw new Error(await r.text());
+}
+async function sbPost(table, body){
+  const r = await fetch(`${SB_URL}/rest/v1/${table}`,{method:"POST",headers:{...SB_H,"Prefer":"return=representation"},body:JSON.stringify(body)});
+  if(!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function sbDelete(table, id){
+  const r = await fetch(`${SB_URL}/rest/v1/${table}?id=eq.${id}`,{method:"DELETE",headers:SB_H});
+  if(!r.ok) throw new Error(await r.text());
 }
 
-function Card({children,style={},onClick}){
-  return <div onClick={onClick} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:20,transition:"border-color .2s",cursor:onClick?"pointer":"default",...style}}
-    onMouseEnter={e=>onClick&&(e.currentTarget.style.borderColor=C.accentMid)}
-    onMouseLeave={e=>onClick&&(e.currentTarget.style.borderColor=C.border)}>{children}</div>;
-}
+// ── PALETTE ──────────────────────────────────────
+const C={bg:"#080a0e",surface:"#0f1318",card:"#141920",border:"#1e2530",accent:"#00e5ff",accentDim:"#00e5ff22",accentMid:"#00e5ff55",gold:"#f0b429",green:"#00e676",red:"#ff4757",orange:"#ff9f43",text1:"#eef2f7",text2:"#8b9ab0",text3:"#4a5568"};
+const STATUS={nouveau:{label:"Nouveau",color:C.accent,bg:C.accentDim},traité:{label:"Traité",color:C.gold,bg:"#f0b42922"},expédié:{label:"Expédié",color:C.green,bg:"#00e67622"},annulé:{label:"Annulé",color:C.red,bg:"#ff475722"}};
+const fmt=n=>parseFloat(n).toFixed(2).replace(".",",")+"\u00a0€";
 
-function StatCard({icon,label,value,sub,color=C.accent,trend}){
-  return <Card style={{display:"flex",flexDirection:"column",gap:12,position:"relative",overflow:"hidden"}}>
-    <div style={{position:"absolute",top:0,right:0,width:80,height:80,background:`radial-gradient(circle at 100% 0%,${color}15 0%,transparent 70%)`}}/>
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-      <span style={{fontSize:24}}>{icon}</span>
-      {trend!==undefined&&<span style={{fontSize:11,fontWeight:600,color:trend>=0?C.green:C.red}}>{trend>=0?"▲":"▼"} {Math.abs(trend)}%</span>}
-    </div>
-    <div>
-      <div style={{fontFamily:"'Bebas Neue'",fontSize:32,color,letterSpacing:"0.03em",lineHeight:1}}>{value}</div>
-      <div style={{fontSize:12,color:C.text2,marginTop:4,fontWeight:500}}>{label}</div>
-      {sub&&<div style={{fontSize:11,color:C.text3,marginTop:2}}>{sub}</div>}
-    </div>
-  </Card>;
-}
+// ── MINI COMPONENTS ──────────────────────────────
+function Badge({status}){const c=STATUS[status]||STATUS.nouveau;return <span style={{display:"inline-flex",padding:"3px 10px",borderRadius:4,fontSize:11,fontWeight:600,letterSpacing:"0.06em",textTransform:"uppercase",color:c.color,background:c.bg,border:`1px solid ${c.color}33`}}>{c.label}</span>;}
+function Card({children,style={},onClick}){return <div onClick={onClick} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:20,transition:"border-color .2s",cursor:onClick?"pointer":"default",...style}} onMouseEnter={e=>onClick&&(e.currentTarget.style.borderColor=C.accentMid)} onMouseLeave={e=>onClick&&(e.currentTarget.style.borderColor=C.border)}>{children}</div>;}
+function Btn({children,onClick,variant="primary",style={},disabled}){const v={primary:{background:C.accent,color:C.bg,border:"none"},ghost:{background:"transparent",color:C.text2,border:`1px solid ${C.border}`},danger:{background:"transparent",color:C.red,border:`1px solid ${C.red}44`},gold:{background:C.gold,color:C.bg,border:"none"}};return <button onClick={onClick} disabled={disabled} style={{...v[variant],padding:"8px 16px",borderRadius:8,fontSize:13,fontWeight:600,cursor:disabled?"not-allowed":"pointer",opacity:disabled?.5:1,transition:"opacity .15s",display:"inline-flex",alignItems:"center",gap:6,...style}} onMouseEnter={e=>!disabled&&(e.currentTarget.style.opacity=".8")} onMouseLeave={e=>!disabled&&(e.currentTarget.style.opacity="1")}>{children}</button>;}
+function Inp({label,value,onChange,type="text",placeholder,required,style={}}){return <div style={{display:"flex",flexDirection:"column",gap:6,...style}}>{label&&<label style={{fontSize:12,fontWeight:600,color:C.text2,letterSpacing:"0.06em",textTransform:"uppercase"}}>{label}{required&&<span style={{color:C.red}}> *</span>}</label>}<input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:14,padding:"10px 14px",outline:"none"}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/></div>;}
+function Sel({label,value,onChange,options,style={}}){return <div style={{display:"flex",flexDirection:"column",gap:6,...style}}>{label&&<label style={{fontSize:12,fontWeight:600,color:C.text2,letterSpacing:"0.06em",textTransform:"uppercase"}}>{label}</label>}<select value={value} onChange={e=>onChange(e.target.value)} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:14,padding:"10px 14px",outline:"none",cursor:"pointer"}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}>{options.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</select></div>;}
 
-function Btn({children,onClick,variant="primary",style={},disabled}){
-  const variants={
-    primary:{background:C.accent,color:C.bg,border:"none"},
-    ghost:{background:"transparent",color:C.text2,border:`1px solid ${C.border}`},
-    danger:{background:"transparent",color:C.red,border:`1px solid ${C.red}44`},
-    gold:{background:C.gold,color:C.bg,border:"none"},
-  };
-  return <button onClick={onClick} disabled={disabled} style={{...variants[variant],padding:"8px 16px",borderRadius:8,fontSize:13,fontWeight:600,cursor:disabled?"not-allowed":"pointer",opacity:disabled?.5:1,transition:"opacity .15s",display:"inline-flex",alignItems:"center",gap:6,...style}}
-    onMouseEnter={e=>!disabled&&(e.currentTarget.style.opacity=".8")}
-    onMouseLeave={e=>!disabled&&(e.currentTarget.style.opacity="1")}>{children}</button>;
-}
+function StatCard({icon,label,value,sub,color=C.accent,trend}){return <Card style={{display:"flex",flexDirection:"column",gap:12,position:"relative",overflow:"hidden"}}><div style={{position:"absolute",top:0,right:0,width:80,height:80,background:`radial-gradient(circle at 100% 0%,${color}15 0%,transparent 70%)`}}/><div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}><span style={{fontSize:24}}>{icon}</span>{trend!==undefined&&<span style={{fontSize:11,fontWeight:600,color:trend>=0?C.green:C.red}}>{trend>=0?"▲":"▼"} {Math.abs(trend)}%</span>}</div><div><div style={{fontFamily:"'Bebas Neue'",fontSize:32,color,letterSpacing:"0.03em",lineHeight:1}}>{value}</div><div style={{fontSize:12,color:C.text2,marginTop:4,fontWeight:500}}>{label}</div>{sub&&<div style={{fontSize:11,color:C.text3,marginTop:2}}>{sub}</div>}</div></Card>;}
 
-function Inp({label,value,onChange,type="text",placeholder,required,style={}}){
-  return <div style={{display:"flex",flexDirection:"column",gap:6,...style}}>
-    {label&&<label style={{fontSize:12,fontWeight:600,color:C.text2,letterSpacing:"0.06em",textTransform:"uppercase"}}>{label}{required&&<span style={{color:C.red}}> *</span>}</label>}
-    <input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:14,padding:"10px 14px",outline:"none"}}
-      onFocus={e=>e.target.style.borderColor=C.accent}
-      onBlur={e=>e.target.style.borderColor=C.border}/>
-  </div>;
-}
-
-function Sel({label,value,onChange,options,style={}}){
-  return <div style={{display:"flex",flexDirection:"column",gap:6,...style}}>
-    {label&&<label style={{fontSize:12,fontWeight:600,color:C.text2,letterSpacing:"0.06em",textTransform:"uppercase"}}>{label}</label>}
-    <select value={value} onChange={e=>onChange(e.target.value)} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:14,padding:"10px 14px",outline:"none",cursor:"pointer"}}
-      onFocus={e=>e.target.style.borderColor=C.accent}
-      onBlur={e=>e.target.style.borderColor=C.border}>
-      {options.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
-    </select>
-  </div>;
-}
-
-/* ── LOGIN ── */
+// ── LOGIN ────────────────────────────────────────
 function LoginPage({onLogin}){
-  const [email,setEmail]=useState("");
-  const [pass,setPass]=useState("");
-  const [err,setErr]=useState("");
-  const [loading,setLoading]=useState(false);
-  const handle=e=>{
-    e.preventDefault();setLoading(true);setErr("");
-    setTimeout(()=>{
-      if(email==="admin@zkpro.fr"&&pass==="zkpro2025")onLogin();
-      else{setErr("Email ou mot de passe incorrect.");setLoading(false);}
-    },700);
-  };
+  const [email,setEmail]=useState(""),[pass,setPass]=useState(""),[ err,setErr]=useState(""),[ loading,setLoading]=useState(false);
+  const handle=e=>{e.preventDefault();setLoading(true);setErr("");setTimeout(()=>{if(email==="admin@zkpro.fr"&&pass==="zkpro2025")onLogin();else{setErr("Email ou mot de passe incorrect.");setLoading(false);}},700);};
   return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:C.bg,position:"relative",overflow:"hidden"}}>
     <div style={{position:"absolute",inset:0,opacity:.04,backgroundImage:`linear-gradient(${C.accent} 1px,transparent 1px),linear-gradient(90deg,${C.accent} 1px,transparent 1px)`,backgroundSize:"40px 40px"}}/>
     <div style={{position:"absolute",top:"20%",left:"10%",width:300,height:300,background:`radial-gradient(circle,${C.accent}15 0%,transparent 70%)`,borderRadius:"50%"}}/>
@@ -146,26 +80,21 @@ function LoginPage({onLogin}){
         <div style={{fontSize:12,color:C.text3,letterSpacing:"0.2em",textTransform:"uppercase",marginTop:4}}>Administration · Grossiste</div>
       </div>
       <Card style={{padding:32}}>
-        <div style={{marginBottom:24}}>
-          <div style={{fontFamily:"'Bebas Neue'",fontSize:24,color:C.text1,letterSpacing:"0.05em"}}>Connexion</div>
-          <div style={{fontSize:13,color:C.text2,marginTop:4}}>Accès réservé aux administrateurs</div>
-        </div>
+        <div style={{marginBottom:24}}><div style={{fontFamily:"'Bebas Neue'",fontSize:24,color:C.text1,letterSpacing:"0.05em"}}>Connexion</div><div style={{fontSize:13,color:C.text2,marginTop:4}}>Accès réservé aux administrateurs</div></div>
         <form onSubmit={handle} style={{display:"flex",flexDirection:"column",gap:16}}>
           <Inp label="Email" type="email" value={email} onChange={setEmail} placeholder="admin@zkpro.fr" required/>
           <Inp label="Mot de passe" type="password" value={pass} onChange={setPass} placeholder="••••••••" required/>
           {err&&<div style={{background:"#ff475715",border:`1px solid ${C.red}44`,borderRadius:8,padding:"10px 14px",fontSize:13,color:C.red}}>{err}</div>}
           <Btn style={{width:"100%",justifyContent:"center",padding:"12px 20px",fontSize:14,marginTop:8}} disabled={loading}>{loading?"Connexion...":"Se connecter →"}</Btn>
         </form>
-        <div style={{marginTop:20,padding:"12px 14px",background:C.surface,borderRadius:8,fontSize:11,color:C.text3}}>
-          <span style={{color:C.text2,fontWeight:600}}>Démo :</span> admin@zkpro.fr / zkpro2025
-        </div>
+        <div style={{marginTop:20,padding:"12px 14px",background:C.surface,borderRadius:8,fontSize:11,color:C.text3}}><span style={{color:C.text2,fontWeight:600}}>Démo :</span> admin@zkpro.fr / zkpro2025</div>
       </Card>
     </div>
   </div>;
 }
 
-/* ── SIDEBAR ── */
-function Sidebar({page,setPage,onLogout}){
+// ── SIDEBAR ──────────────────────────────────────
+function Sidebar({page,setPage,onLogout,newCount}){
   const nav=[{id:"dashboard",icon:"◈",label:"Dashboard"},{id:"orders",icon:"≡",label:"Commandes"},{id:"catalog",icon:"⊞",label:"Catalogue"},{id:"settings",icon:"⊙",label:"Paramètres"}];
   return <div style={{width:220,minHeight:"100vh",background:C.surface,borderRight:`1px solid ${C.border}`,display:"flex",flexDirection:"column",position:"fixed",left:0,top:0,bottom:0,zIndex:100}}>
     <div style={{padding:"24px 20px",borderBottom:`1px solid ${C.border}`}}>
@@ -173,15 +102,13 @@ function Sidebar({page,setPage,onLogout}){
       <div style={{fontSize:10,color:C.text3,letterSpacing:"0.15em",textTransform:"uppercase",marginTop:2}}>Admin Panel</div>
     </div>
     <div style={{padding:"12px 20px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:8}}>
-      <span className="live-dot"/><span style={{fontSize:11,color:C.text3}}>Bot Telegram actif</span>
+      <span className="live-dot"/><span style={{fontSize:11,color:C.text3}}>Supabase connecté</span>
     </div>
     <nav style={{flex:1,padding:"12px"}}>
-      {nav.map(item=><button key={item.id} onClick={()=>setPage(item.id)} style={{display:"flex",alignItems:"center",gap:12,width:"100%",padding:"11px 12px",borderRadius:8,marginBottom:4,background:page===item.id?C.accentDim:"transparent",border:page===item.id?`1px solid ${C.accentMid}`:"1px solid transparent",color:page===item.id?C.accent:C.text2,fontSize:14,fontWeight:500,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}
-        onMouseEnter={e=>page!==item.id&&(e.currentTarget.style.background="#ffffff08")}
-        onMouseLeave={e=>page!==item.id&&(e.currentTarget.style.background="transparent")}>
+      {nav.map(item=><button key={item.id} onClick={()=>setPage(item.id)} style={{display:"flex",alignItems:"center",gap:12,width:"100%",padding:"11px 12px",borderRadius:8,marginBottom:4,background:page===item.id?C.accentDim:"transparent",border:page===item.id?`1px solid ${C.accentMid}`:"1px solid transparent",color:page===item.id?C.accent:C.text2,fontSize:14,fontWeight:500,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}} onMouseEnter={e=>page!==item.id&&(e.currentTarget.style.background="#ffffff08")} onMouseLeave={e=>page!==item.id&&(e.currentTarget.style.background="transparent")}>
         <span style={{fontSize:18,lineHeight:1,fontFamily:"monospace"}}>{item.icon}</span>
         <span>{item.label}</span>
-        {item.id==="orders"&&<span style={{marginLeft:"auto",background:C.accent,color:C.bg,borderRadius:10,fontSize:10,fontWeight:700,padding:"1px 6px"}}>2</span>}
+        {item.id==="orders"&&newCount>0&&<span style={{marginLeft:"auto",background:C.accent,color:C.bg,borderRadius:10,fontSize:10,fontWeight:700,padding:"1px 6px"}}>{newCount}</span>}
       </button>)}
     </nav>
     <div style={{padding:"16px 12px",borderTop:`1px solid ${C.border}`}}>
@@ -189,33 +116,34 @@ function Sidebar({page,setPage,onLogout}){
         <div style={{width:32,height:32,borderRadius:8,background:C.accentDim,border:`1px solid ${C.accentMid}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,color:C.accent,fontWeight:700}}>A</div>
         <div><div style={{fontSize:13,fontWeight:600,color:C.text1}}>Admin</div><div style={{fontSize:10,color:C.text3}}>admin@zkpro.fr</div></div>
       </div>
-      <button onClick={onLogout} style={{width:"100%",padding:"8px 12px",borderRadius:8,background:"transparent",border:`1px solid ${C.border}`,color:C.text3,fontSize:12,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}
-        onMouseEnter={e=>{e.currentTarget.style.borderColor=C.red+"88";e.currentTarget.style.color=C.red;}}
-        onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color=C.text3;}}>
-        Déconnexion
-      </button>
+      <button onClick={onLogout} style={{width:"100%",padding:"8px 12px",borderRadius:8,background:"transparent",border:`1px solid ${C.border}`,color:C.text3,fontSize:12,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}} onMouseEnter={e=>{e.currentTarget.style.borderColor=C.red+"88";e.currentTarget.style.color=C.red;}} onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color=C.text3;}}>Déconnexion</button>
     </div>
   </div>;
 }
 
-/* ── DASHBOARD ── */
-function DashboardPage({orders,setPage}){
-  const totalCA=orders.filter(o=>o.status!=="annulé").reduce((s,o)=>s+o.total+o.livraison,0);
+// ── DASHBOARD ────────────────────────────────────
+function DashboardPage({orders,setPage,loading}){
+  const active=orders.filter(o=>o.status!=="annulé");
+  const totalCA=active.reduce((s,o)=>s+parseFloat(o.total)+parseFloat(o.livraison),0);
   const newOrders=orders.filter(o=>o.status==="nouveau").length;
   const shipped=orders.filter(o=>o.status==="expédié").length;
   return <div className="fade-in" style={{display:"flex",flexDirection:"column",gap:24}}>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
       <div>
         <div style={{fontFamily:"'Bebas Neue'",fontSize:36,color:C.text1,letterSpacing:"0.05em"}}>Dashboard</div>
-        <div style={{fontSize:13,color:C.text3,marginTop:2}}>Lundi 10 mars 2025</div>
+        <div style={{fontSize:13,color:C.text3,marginTop:2}}>Synchronisé avec Supabase · <a href="https://anserfj.github.io/telegram-shop/" target="_blank" style={{color:C.accent,textDecoration:"none"}}>Voir la boutique →</a></div>
       </div>
-      <Btn onClick={()=>setPage("orders")}>Voir les commandes →</Btn>
+      <div style={{display:"flex",gap:10}}>
+        <Btn variant="ghost" onClick={()=>window.open("https://anserfj.github.io/telegram-shop/","_blank")}>🛒 Boutique</Btn>
+        <Btn onClick={()=>setPage("orders")}>Voir les commandes →</Btn>
+      </div>
     </div>
+    {loading?<div style={{padding:40,textAlign:"center"}}><div className="spinner"/></div>:<>
     <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:16}}>
-      <StatCard icon="💰" label="Chiffre d'affaires" value={fmt(totalCA)} sub="Ce mois-ci" color={C.accent} trend={12}/>
+      <StatCard icon="💰" label="Chiffre d'affaires" value={fmt(totalCA)} sub="Total commandes actives" color={C.accent} trend={12}/>
       <StatCard icon="📦" label="Commandes totales" value={String(orders.length)} sub={`${newOrders} nouveau${newOrders>1?"x":""}`} color={C.gold} trend={8}/>
-      <StatCard icon="🚚" label="Expédiées" value={String(shipped)} sub="En cours" color={C.green} trend={5}/>
-      <StatCard icon="👥" label="Revendeurs actifs" value="47" sub="Cette semaine" color={C.orange} trend={3}/>
+      <StatCard icon="🚚" label="Expédiées" value={String(shipped)} sub="En cours de livraison" color={C.green} trend={5}/>
+      <StatCard icon="🔔" label="En attente" value={String(newOrders)} sub="À traiter" color={newOrders>0?C.orange:C.text3}/>
     </div>
     <div style={{display:"grid",gridTemplateColumns:"1.6fr 1fr",gap:16}}>
       <Card>
@@ -226,74 +154,78 @@ function DashboardPage({orders,setPage}){
         {orders.slice(0,5).map(o=><div key={o.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 12px",background:C.surface,borderRadius:8,border:`1px solid ${C.border}`,marginBottom:8}}>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
             <div style={{fontFamily:"'JetBrains Mono'",fontSize:11,color:C.accent,fontWeight:500}}>{o.id}</div>
-            <div style={{fontSize:13,color:C.text2}}>{o.user}</div>
+            <div style={{fontSize:13,color:C.text2}}>{o.telegram_user}</div>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
-            <span style={{fontSize:13,fontWeight:600,color:C.text1}}>{fmt(o.total+o.livraison)}</span>
+            <span style={{fontSize:13,fontWeight:600,color:C.text1}}>{fmt(parseFloat(o.total)+parseFloat(o.livraison))}</span>
             <Badge status={o.status}/>
           </div>
         </div>)}
       </Card>
       <Card>
-        <div style={{fontFamily:"'Bebas Neue'",fontSize:20,letterSpacing:"0.05em",marginBottom:20}}>Top produits</div>
-        {[{name:"Elf Bar 600 Mix Fruits",pct:85,val:"340 unités"},{name:"Vozol Star 6000",pct:62,val:"210 unités"},{name:"Carton 100 puffs mixte",pct:45,val:"30 cartons"},{name:"R&M Tornado",pct:38,val:"130 unités"},{name:"Lost Mary BM600",pct:30,val:"180 unités"}].map((p,i)=><div key={i} style={{marginBottom:12}}>
-          <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
-            <span style={{fontSize:12,color:C.text2}}>{p.name}</span>
-            <span style={{fontSize:11,color:C.text3,fontFamily:"'JetBrains Mono'"}}>{p.val}</span>
+        <div style={{fontFamily:"'Bebas Neue'",fontSize:20,letterSpacing:"0.05em",marginBottom:16}}>Infos boutique</div>
+        <div style={{display:"flex",flexDirection:"column",gap:12}}>
+          <div style={{padding:"12px 14px",background:C.surface,borderRadius:8,fontSize:12}}>
+            <div style={{color:C.text2,marginBottom:4}}>🛒 Boutique Telegram</div>
+            <a href="https://anserfj.github.io/telegram-shop/" target="_blank" style={{color:C.accent,fontSize:11,fontFamily:"'JetBrains Mono'",wordBreak:"break-all",textDecoration:"none"}}>anserfj.github.io/telegram-shop</a>
           </div>
-          <div style={{height:4,background:C.border,borderRadius:2}}>
-            <div style={{height:"100%",width:`${p.pct}%`,background:`linear-gradient(90deg,${C.accent},${C.accentMid})`,borderRadius:2}}/>
+          <div style={{padding:"12px 14px",background:C.surface,borderRadius:8,fontSize:12}}>
+            <div style={{color:C.text2,marginBottom:4}}>🗄️ Base de données</div>
+            <div style={{color:C.green,fontSize:11,fontFamily:"'JetBrains Mono'"}}>● Supabase connecté</div>
           </div>
-        </div>)}
+          <div style={{padding:"12px 14px",background:C.surface,borderRadius:8,fontSize:12}}>
+            <div style={{color:C.text2,marginBottom:6}}>📊 Répartition commandes</div>
+            {Object.entries(STATUS).map(([k,v])=>{const n=orders.filter(o=>o.status===k).length;return <div key={k} style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{color:v.color,fontSize:11}}>{v.label}</span><span style={{color:C.text3,fontSize:11,fontFamily:"'JetBrains Mono'"}}>{n}</span></div>;})}
+          </div>
+        </div>
       </Card>
     </div>
+    </>}
   </div>;
 }
 
-/* ── ORDERS ── */
-function OrdersPage({orders,setOrders}){
-  const [filter,setFilter]=useState("tous");
-  const [selected,setSelected]=useState(null);
-  const [search,setSearch]=useState("");
+// ── ORDERS ───────────────────────────────────────
+function OrdersPage({orders,setOrders,loading,reload}){
+  const [filter,setFilter]=useState("tous"),[ selected,setSelected]=useState(null),[ search,setSearch]=useState(""),[ updating,setUpdating]=useState(false);
   const filtered=orders.filter(o=>{
     if(filter!=="tous"&&o.status!==filter)return false;
-    if(search&&!o.id.toLowerCase().includes(search.toLowerCase())&&!o.user.toLowerCase().includes(search.toLowerCase()))return false;
+    if(search&&!o.id.toLowerCase().includes(search.toLowerCase())&&!o.telegram_user.toLowerCase().includes(search.toLowerCase()))return false;
     return true;
   });
-  const updateStatus=(id,status)=>{
-    setOrders(prev=>prev.map(o=>o.id===id?{...o,status}:o));
-    setSelected(prev=>prev&&prev.id===id?{...prev,status}:prev);
+  const updateStatus=async(id,status)=>{
+    setUpdating(true);
+    try{await sbPatch("orders",id,{status});setOrders(prev=>prev.map(o=>o.id===id?{...o,status}:o));setSelected(prev=>prev&&prev.id===id?{...prev,status}:prev);}
+    catch(e){alert("Erreur: "+e.message);}
+    setUpdating(false);
   };
   return <div className="fade-in" style={{display:"flex",flexDirection:"column",gap:20}}>
-    <div style={{fontFamily:"'Bebas Neue'",fontSize:36,letterSpacing:"0.05em"}}>Commandes</div>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+      <div style={{fontFamily:"'Bebas Neue'",fontSize:36,letterSpacing:"0.05em"}}>Commandes</div>
+      <Btn variant="ghost" onClick={reload}>🔄 Actualiser</Btn>
+    </div>
     <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
-      <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher..." style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:13,padding:"9px 14px",outline:"none",width:240}}
-        onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+      <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher par ID ou @client..." style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:13,padding:"9px 14px",outline:"none",width:280}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
       <div style={{display:"flex",gap:8,marginLeft:"auto"}}>
         {["tous","nouveau","traité","expédié","annulé"].map(s=><button key={s} onClick={()=>setFilter(s)} style={{padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:600,cursor:"pointer",textTransform:"capitalize",background:filter===s?C.accent:"transparent",color:filter===s?C.bg:C.text2,border:`1px solid ${filter===s?C.accent:C.border}`,fontFamily:"'DM Sans',sans-serif"}}>{s}</button>)}
       </div>
     </div>
+    {loading?<div style={{padding:40,textAlign:"center"}}><div className="spinner"/></div>:
     <div style={{display:"flex",gap:16}}>
       <div style={{flex:1}}>
         <Card style={{padding:0,overflow:"hidden"}}>
           <table style={{width:"100%",borderCollapse:"collapse"}}>
-            <thead><tr style={{borderBottom:`1px solid ${C.border}`}}>
-              {["ID","Client","Date","Montant","Statut","Actions"].map(h=><th key={h} style={{padding:"12px 16px",textAlign:"left",fontSize:11,color:C.text3,fontWeight:600,letterSpacing:"0.08em",textTransform:"uppercase"}}>{h}</th>)}
-            </tr></thead>
+            <thead><tr style={{borderBottom:`1px solid ${C.border}`}}>{["ID","Client","Date","Montant","Statut","Actions"].map(h=><th key={h} style={{padding:"12px 16px",textAlign:"left",fontSize:11,color:C.text3,fontWeight:600,letterSpacing:"0.08em",textTransform:"uppercase"}}>{h}</th>)}</tr></thead>
             <tbody>
-              {filtered.map((o,i)=><tr key={o.id} onClick={()=>setSelected(selected?.id===o.id?null:o)}
-                style={{borderBottom:`1px solid ${C.border}`,cursor:"pointer",background:selected?.id===o.id?C.accentDim:i%2===0?"transparent":"#ffffff03"}}
-                onMouseEnter={e=>selected?.id!==o.id&&(e.currentTarget.style.background="#ffffff06")}
-                onMouseLeave={e=>selected?.id!==o.id&&(e.currentTarget.style.background=i%2===0?"transparent":"#ffffff03")}>
+              {filtered.map((o,i)=><tr key={o.id} onClick={()=>setSelected(selected?.id===o.id?null:o)} style={{borderBottom:`1px solid ${C.border}`,cursor:"pointer",background:selected?.id===o.id?C.accentDim:i%2===0?"transparent":"#ffffff03"}} onMouseEnter={e=>selected?.id!==o.id&&(e.currentTarget.style.background="#ffffff06")} onMouseLeave={e=>selected?.id!==o.id&&(e.currentTarget.style.background=i%2===0?"transparent":"#ffffff03")}>
                 <td style={{padding:"12px 16px",fontFamily:"'JetBrains Mono'",fontSize:12,color:C.accent}}>{o.id}</td>
-                <td style={{padding:"12px 16px",fontSize:13,color:C.text1}}>{o.user}</td>
-                <td style={{padding:"12px 16px",fontSize:12,color:C.text3,fontFamily:"'JetBrains Mono'"}}>{o.date.split(" ")[0]}</td>
-                <td style={{padding:"12px 16px",fontSize:13,fontWeight:600,color:C.text1}}>{fmt(o.total+o.livraison)}</td>
+                <td style={{padding:"12px 16px",fontSize:13,color:C.text1}}>{o.telegram_user}</td>
+                <td style={{padding:"12px 16px",fontSize:12,color:C.text3,fontFamily:"'JetBrains Mono'"}}>{new Date(o.created_at).toLocaleDateString("fr-FR")}</td>
+                <td style={{padding:"12px 16px",fontSize:13,fontWeight:600,color:C.text1}}>{fmt(parseFloat(o.total)+parseFloat(o.livraison))}</td>
                 <td style={{padding:"12px 16px"}}><Badge status={o.status}/></td>
                 <td style={{padding:"12px 16px"}}>
                   <div style={{display:"flex",gap:6}}>
-                    {o.status==="nouveau"&&<Btn variant="gold" style={{padding:"4px 10px",fontSize:11}} onClick={e=>{e.stopPropagation();updateStatus(o.id,"traité");}}>✓ Traiter</Btn>}
-                    {o.status==="traité"&&<Btn variant="primary" style={{padding:"4px 10px",fontSize:11}} onClick={e=>{e.stopPropagation();updateStatus(o.id,"expédié");}}>🚚 Expédier</Btn>}
+                    {o.status==="nouveau"&&<Btn variant="gold" style={{padding:"4px 10px",fontSize:11}} disabled={updating} onClick={e=>{e.stopPropagation();updateStatus(o.id,"traité");}}>✓ Traiter</Btn>}
+                    {o.status==="traité"&&<Btn variant="primary" style={{padding:"4px 10px",fontSize:11}} disabled={updating} onClick={e=>{e.stopPropagation();updateStatus(o.id,"expédié");}}>🚚 Expédier</Btn>}
                   </div>
                 </td>
               </tr>)}
@@ -310,67 +242,80 @@ function OrdersPage({orders,setOrders}){
           </div>
           <div style={{display:"flex",flexDirection:"column",gap:16}}>
             <div>
-              <div style={{fontSize:11,color:C.text3,marginBottom:4,textTransform:"uppercase",letterSpacing:"0.08em"}}>Client</div>
-              <div style={{fontSize:15,fontWeight:600,color:C.text1}}>{selected.user}</div>
-              <div style={{fontSize:11,color:C.text3,marginTop:2}}>{selected.date}</div>
+              <div style={{fontSize:11,color:C.text3,marginBottom:4,textTransform:"uppercase",letterSpacing:"0.08em"}}>Client Telegram</div>
+              <div style={{fontSize:15,fontWeight:600,color:C.text1}}>{selected.telegram_user}</div>
+              <div style={{fontSize:11,color:C.text3,marginTop:2}}>{new Date(selected.created_at).toLocaleString("fr-FR")}</div>
             </div>
             <div style={{borderTop:`1px solid ${C.border}`,paddingTop:16}}>
-              <div style={{fontSize:11,color:C.text3,marginBottom:10,textTransform:"uppercase",letterSpacing:"0.08em"}}>Articles</div>
-              {selected.items.map((item,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+              <div style={{fontSize:11,color:C.text3,marginBottom:10,textTransform:"uppercase",letterSpacing:"0.08em"}}>Articles commandés</div>
+              {(Array.isArray(selected.items)?selected.items:JSON.parse(selected.items||"[]")).map((item,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
                 <div><div style={{fontSize:12,color:C.text1}}>{item.name}</div><div style={{fontSize:11,color:C.text3}}>×{item.qty} × {fmt(item.price)}</div></div>
                 <div style={{fontSize:13,fontWeight:600,color:C.text1}}>{fmt(item.qty*item.price)}</div>
               </div>)}
             </div>
             <div style={{borderTop:`1px solid ${C.border}`,paddingTop:12}}>
               <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{fontSize:12,color:C.text2}}>Sous-total</span><span style={{fontSize:12,color:C.text2}}>{fmt(selected.total)}</span></div>
-              <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}><span style={{fontSize:12,color:C.text2}}>Livraison</span><span style={{fontSize:12,color:selected.livraison===0?C.green:C.text2}}>{selected.livraison===0?"OFFERTE":fmt(selected.livraison)}</span></div>
-              <div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontWeight:700,color:C.text1}}>Total TTC</span><span style={{fontWeight:700,color:C.accent,fontSize:16}}>{fmt(selected.total+selected.livraison)}</span></div>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}><span style={{fontSize:12,color:C.text2}}>Livraison</span><span style={{fontSize:12,color:parseFloat(selected.livraison)===0?C.green:C.text2}}>{parseFloat(selected.livraison)===0?"OFFERTE":fmt(selected.livraison)}</span></div>
+              <div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontWeight:700,color:C.text1}}>Total TTC</span><span style={{fontWeight:700,color:C.accent,fontSize:16}}>{fmt(parseFloat(selected.total)+parseFloat(selected.livraison))}</span></div>
             </div>
             <div>
               <div style={{fontSize:11,color:C.text3,marginBottom:8,textTransform:"uppercase",letterSpacing:"0.08em"}}>Changer le statut</div>
               <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                {Object.entries(STATUS_CONFIG).map(([key,cfg])=><button key={key} onClick={()=>updateStatus(selected.id,key)} style={{padding:"5px 10px",borderRadius:6,fontSize:11,fontWeight:600,cursor:"pointer",border:`1px solid ${selected.status===key?cfg.color:C.border}`,background:selected.status===key?cfg.bg:"transparent",color:selected.status===key?cfg.color:C.text3,fontFamily:"'DM Sans',sans-serif"}}>{cfg.label}</button>)}
+                {Object.entries(STATUS).map(([key,cfg])=><button key={key} onClick={()=>updateStatus(selected.id,key)} disabled={updating} style={{padding:"5px 10px",borderRadius:6,fontSize:11,fontWeight:600,cursor:"pointer",border:`1px solid ${selected.status===key?cfg.color:C.border}`,background:selected.status===key?cfg.bg:"transparent",color:selected.status===key?cfg.color:C.text3,fontFamily:"'DM Sans',sans-serif"}}>{cfg.label}</button>)}
               </div>
             </div>
           </div>
         </Card>
       </div>}
-    </div>
+    </div>}
   </div>;
 }
 
-/* ── CATALOG ── */
-function CatalogPage({products,setProducts}){
-  const [filter,setFilter]=useState("tous");
-  const [modal,setModal]=useState(null);
-  const [form,setForm]=useState({name:"",cat:"puff",emoji:"💨",price:"",unit:"/ unité",minQty:"10",badge:"",stock:""});
-  const [toast,setToast]=useState("");
+// ── CATALOG ──────────────────────────────────────
+function CatalogPage({products,setProducts,loading,reload}){
+  const [filter,setFilter]=useState("tous"),[ modal,setModal]=useState(null),[ form,setForm]=useState({name:"",cat:"puff",emoji:"💨",price:"",unit:"/ unité",min_qty:"10",badge:"",stock:""}),[ saving,setSaving]=useState(false),[ toast,setToast]=useState("");
   const showToast=msg=>{setToast(msg);setTimeout(()=>setToast(""),2500);};
-  const openNew=()=>{setForm({name:"",cat:"puff",emoji:"💨",price:"",unit:"/ unité",minQty:"10",badge:"",stock:""});setModal("new");};
-  const openEdit=p=>{setForm({name:p.name,cat:p.cat,emoji:p.emoji,price:String(p.price),unit:p.unit,minQty:String(p.minQty),badge:p.badge||"",stock:String(p.stock)});setModal(p);};
-  const save=()=>{
+  const openNew=()=>{setForm({name:"",cat:"puff",emoji:"💨",price:"",unit:"/ unité",min_qty:"10",badge:"",stock:""});setModal("new");};
+  const openEdit=p=>{setForm({name:p.name,cat:p.cat,emoji:p.emoji||"💨",price:String(p.price),unit:p.unit,min_qty:String(p.min_qty),badge:p.badge||"",stock:String(p.stock)});setModal(p);};
+  const save=async()=>{
     if(!form.name||!form.price)return;
-    if(modal==="new"){setProducts(prev=>[...prev,{id:Date.now(),...form,price:parseFloat(form.price),minQty:parseInt(form.minQty)||1,stock:parseInt(form.stock)||0,badge:form.badge||null}]);showToast("✅ Produit ajouté !");}
-    else{setProducts(prev=>prev.map(p=>p.id===modal.id?{...p,...form,price:parseFloat(form.price),minQty:parseInt(form.minQty)||1,stock:parseInt(form.stock)||0,badge:form.badge||null}:p));showToast("✅ Produit modifié !");}
-    setModal(null);
+    setSaving(true);
+    const body={name:form.name,cat:form.cat,emoji:form.emoji,price:parseFloat(form.price),unit:form.unit,min_qty:parseInt(form.min_qty)||1,stock:parseInt(form.stock)||0,badge:form.badge||null};
+    try{
+      if(modal==="new"){const [r]=await sbPost("products",body);setProducts(prev=>[...prev,{...r,min_qty:r.min_qty}]);showToast("✅ Produit ajouté !");}
+      else{await sbPatch("products",modal.id,body);setProducts(prev=>prev.map(p=>p.id===modal.id?{...p,...body}:p));showToast("✅ Produit modifié !");}
+      setModal(null);
+    }catch(e){alert("Erreur: "+e.message);}
+    setSaving(false);
   };
-  const remove=id=>{setProducts(prev=>prev.filter(p=>p.id!==id));showToast("🗑️ Produit supprimé");};
+  const remove=async id=>{
+    if(!confirm("Supprimer ce produit ?"))return;
+    try{await sbDelete("products",id);setProducts(prev=>prev.filter(p=>p.id!==id));showToast("🗑️ Produit supprimé");}
+    catch(e){alert("Erreur: "+e.message);}
+  };
   const filtered=filter==="tous"?products:products.filter(p=>p.cat===filter);
   const sf={padding:"7px 16px",borderRadius:8,fontSize:12,fontWeight:600,cursor:"pointer",textTransform:"capitalize",fontFamily:"'DM Sans',sans-serif"};
   return <div className="fade-in" style={{display:"flex",flexDirection:"column",gap:20,position:"relative"}}>
     {toast&&<div style={{position:"fixed",bottom:24,right:24,background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 20px",fontSize:14,color:C.text1,zIndex:999}}>{toast}</div>}
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-      <div style={{fontFamily:"'Bebas Neue'",fontSize:36,letterSpacing:"0.05em"}}>Catalogue</div>
-      <Btn onClick={openNew}>+ Ajouter un produit</Btn>
+      <div>
+        <div style={{fontFamily:"'Bebas Neue'",fontSize:36,letterSpacing:"0.05em"}}>Catalogue</div>
+        <div style={{fontSize:12,color:C.text3,marginTop:2}}>Synchronisé avec la boutique Telegram en temps réel</div>
+      </div>
+      <div style={{display:"flex",gap:10}}>
+        <Btn variant="ghost" onClick={reload}>🔄 Actualiser</Btn>
+        <Btn onClick={openNew}>+ Ajouter un produit</Btn>
+      </div>
     </div>
     <div style={{display:"flex",gap:8}}>
       {["tous","puff","recharge","accessoire"].map(c=><button key={c} onClick={()=>setFilter(c)} style={{...sf,background:filter===c?C.accent:"transparent",color:filter===c?C.bg:C.text2,border:`1px solid ${filter===c?C.accent:C.border}`}}>{c}</button>)}
       <span style={{marginLeft:"auto",color:C.text3,fontSize:13,alignSelf:"center"}}>{filtered.length} produit{filtered.length>1?"s":""}</span>
     </div>
+    {loading?<div style={{padding:40,textAlign:"center"}}><div className="spinner"/></div>:
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))",gap:14}}>
       {filtered.map(p=><Card key={p.id} style={{padding:16}}>
         <div style={{display:"flex",alignItems:"flex-start",gap:12,marginBottom:14}}>
-          <div style={{fontSize:32,lineHeight:1}}>{p.emoji}</div>
+          <div style={{fontSize:32,lineHeight:1}}>{p.emoji||"💨"}</div>
           <div style={{flex:1}}>
             <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
               <span style={{fontSize:10,color:C.text3,textTransform:"uppercase",letterSpacing:"0.08em"}}>{p.cat}</span>
@@ -380,108 +325,99 @@ function CatalogPage({products,setProducts}){
           </div>
         </div>
         <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}>
-          <div>
-            <div style={{fontFamily:"'Bebas Neue'",fontSize:22,color:C.accent,letterSpacing:"0.03em"}}>{fmt(p.price)}</div>
-            <div style={{fontSize:10,color:C.text3}}>{p.unit} · min. {p.minQty}</div>
-          </div>
-          <div style={{textAlign:"right"}}>
-            <div style={{fontSize:18,fontWeight:700,color:p.stock<50?C.orange:C.green}}>{p.stock}</div>
-            <div style={{fontSize:10,color:C.text3}}>en stock</div>
-          </div>
+          <div><div style={{fontFamily:"'Bebas Neue'",fontSize:22,color:C.accent,letterSpacing:"0.03em"}}>{fmt(p.price)}</div><div style={{fontSize:10,color:C.text3}}>{p.unit} · min. {p.min_qty}</div></div>
+          <div style={{textAlign:"right"}}><div style={{fontSize:18,fontWeight:700,color:p.stock<50?C.orange:C.green}}>{p.stock}</div><div style={{fontSize:10,color:C.text3}}>en stock</div></div>
         </div>
         <div style={{display:"flex",gap:8}}>
           <Btn variant="ghost" style={{flex:1,justifyContent:"center",fontSize:12,padding:"6px 10px"}} onClick={()=>openEdit(p)}>✏️ Modifier</Btn>
           <Btn variant="danger" style={{padding:"6px 10px",fontSize:12}} onClick={()=>remove(p.id)}>🗑️</Btn>
         </div>
       </Card>)}
-    </div>
+    </div>}
     {modal&&<div style={{position:"fixed",inset:0,background:"#000000bb",display:"flex",alignItems:"center",justifyContent:"center",zIndex:500}} onClick={()=>setModal(null)}>
       <div className="scale-in" style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:28,width:460,maxWidth:"90vw"}} onClick={e=>e.stopPropagation()}>
         <div style={{fontFamily:"'Bebas Neue'",fontSize:24,letterSpacing:"0.05em",marginBottom:24}}>{modal==="new"?"Nouveau produit":"Modifier le produit"}</div>
         <div style={{display:"flex",flexDirection:"column",gap:14}}>
-          <div style={{display:"grid",gridTemplateColumns:"80px 1fr",gap:12}}>
-            <Inp label="Emoji" value={form.emoji} onChange={v=>setForm(f=>({...f,emoji:v}))}/>
-            <Inp label="Nom du produit" value={form.name} onChange={v=>setForm(f=>({...f,name:v}))} required/>
-          </div>
+          <div style={{display:"grid",gridTemplateColumns:"80px 1fr",gap:12}}><Inp label="Emoji" value={form.emoji} onChange={v=>setForm(f=>({...f,emoji:v}))}/><Inp label="Nom du produit" value={form.name} onChange={v=>setForm(f=>({...f,name:v}))} required/></div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
             <Sel label="Catégorie" value={form.cat} onChange={v=>setForm(f=>({...f,cat:v}))} options={[{value:"puff",label:"Puff"},{value:"recharge",label:"Recharge"},{value:"accessoire",label:"Accessoire"}]}/>
             <Sel label="Badge" value={form.badge} onChange={v=>setForm(f=>({...f,badge:v}))} options={[{value:"",label:"Aucun"},{value:"new",label:"Nouveau"},{value:"promo",label:"Promo"},{value:"top",label:"Top"},{value:"stock",label:"Stock !"}]}/>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
             <Inp label="Prix (€)" type="number" value={form.price} onChange={v=>setForm(f=>({...f,price:v}))} required/>
-            <Inp label="Qté min." type="number" value={form.minQty} onChange={v=>setForm(f=>({...f,minQty:v}))}/>
+            <Inp label="Qté min." type="number" value={form.min_qty} onChange={v=>setForm(f=>({...f,min_qty:v}))}/>
             <Inp label="Stock" type="number" value={form.stock} onChange={v=>setForm(f=>({...f,stock:v}))}/>
           </div>
           <Inp label="Unité (affichage)" value={form.unit} onChange={v=>setForm(f=>({...f,unit:v}))} placeholder="/ unité"/>
         </div>
         <div style={{display:"flex",gap:10,marginTop:24,justifyContent:"flex-end"}}>
           <Btn variant="ghost" onClick={()=>setModal(null)}>Annuler</Btn>
-          <Btn onClick={save} disabled={!form.name||!form.price}>{modal==="new"?"Créer le produit":"Enregistrer"}</Btn>
+          <Btn onClick={save} disabled={saving||!form.name||!form.price}>{saving?"Sauvegarde...":modal==="new"?"Créer le produit":"Enregistrer"}</Btn>
         </div>
       </div>
     </div>}
   </div>;
 }
 
-/* ── SETTINGS ── */
-function SettingsPage(){
-  const [saved,setSaved]=useState(false);
-  const [token,setToken]=useState("7849201043:AAF_zkpro_demo_bot_token");
-  const [seuil,setSeuil]=useState("200");
-  const [livraison,setLivraison]=useState("9.90");
-  const save=()=>{setSaved(true);setTimeout(()=>setSaved(false),2000);};
-  return <div className="fade-in" style={{display:"flex",flexDirection:"column",gap:24,maxWidth:680}}>
-    <div style={{fontFamily:"'Bebas Neue'",fontSize:36,letterSpacing:"0.05em"}}>Paramètres</div>
-    <Card>
-      <div style={{fontFamily:"'Bebas Neue'",fontSize:20,letterSpacing:"0.05em",marginBottom:20}}>Bot Telegram</div>
-      <div style={{display:"flex",flexDirection:"column",gap:16}}>
-        <Inp label="Token du bot" value={token} onChange={setToken}/>
-        <div style={{padding:"12px 14px",background:C.surface,borderRadius:8,fontSize:12,color:C.text3}}>
-          <span style={{color:C.green}}>●</span> Bot connecté · Webhook actif sur <span style={{fontFamily:"'JetBrains Mono'",color:C.accent}}>t.me/zkpro_shop_bot</span>
-        </div>
-      </div>
-    </Card>
-    <Card>
-      <div style={{fontFamily:"'Bebas Neue'",fontSize:20,letterSpacing:"0.05em",marginBottom:20}}>Livraison & commandes</div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
-        <Inp label="Seuil livraison offerte (€)" type="number" value={seuil} onChange={setSeuil}/>
-        <Inp label="Frais de livraison (€)" type="number" value={livraison} onChange={setLivraison}/>
-      </div>
-    </Card>
-    <Card>
-      <div style={{fontFamily:"'Bebas Neue'",fontSize:20,letterSpacing:"0.05em",marginBottom:16}}>Intégration Supabase</div>
-      <div style={{padding:16,background:C.surface,borderRadius:8,border:`1px solid ${C.border}`,fontSize:13,color:C.text2,lineHeight:1.8}}>
-        <div style={{fontWeight:600,color:C.text1,marginBottom:8}}>Pour connecter une vraie base de données :</div>
-        <div>1. Créer un projet sur <span style={{color:C.accent}}>supabase.com</span></div>
-        <div>2. Ajouter les tables <span style={{fontFamily:"'JetBrains Mono'",color:C.accent}}>orders</span> et <span style={{fontFamily:"'JetBrains Mono'",color:C.accent}}>products</span></div>
-        <div>3. Renseigner l'URL et la clé API ci-dessous</div>
-      </div>
-      <div style={{display:"flex",flexDirection:"column",gap:12,marginTop:16}}>
-        <Inp label="Supabase URL" placeholder="https://xxx.supabase.co" value="" onChange={()=>{}}/>
-        <Inp label="Supabase Anon Key" placeholder="eyJhbGciOiJIUzI1NiIsInR5..." value="" onChange={()=>{}}/>
-      </div>
-    </Card>
-    <div style={{display:"flex",gap:10}}>
-      <Btn onClick={save}>{saved?"✓ Enregistré !":"Enregistrer les modifications"}</Btn>
-      <Btn variant="ghost">Réinitialiser</Btn>
-    </div>
-  </div>;
-}
-
-/* ── APP ── */
+// ── APP ───────────────────────────────────────────
 function App(){
   const [logged,setLogged]=useState(false);
   const [page,setPage]=useState("dashboard");
-  const [orders,setOrders]=useState(MOCK_ORDERS);
-  const [products,setProducts]=useState(MOCK_PRODUCTS);
+  const [orders,setOrders]=useState([]);
+  const [products,setProducts]=useState([]);
+  const [loadingOrders,setLoadingOrders]=useState(false);
+  const [loadingProducts,setLoadingProducts]=useState(false);
+
+  const fetchOrders=async()=>{
+    setLoadingOrders(true);
+    try{const d=await sbGet("orders","?order=created_at.desc");setOrders(d);}
+    catch(e){console.error("Orders error:",e);}
+    setLoadingOrders(false);
+  };
+
+  const fetchProducts=async()=>{
+    setLoadingProducts(true);
+    try{const d=await sbGet("products","?order=id.asc");setProducts(d);}
+    catch(e){console.error("Products error:",e);}
+    setLoadingProducts(false);
+  };
+
+  useEffect(()=>{
+    if(logged){fetchOrders();fetchProducts();}
+  },[logged]);
+
+  // Auto-refresh toutes les 30s pour les nouvelles commandes
+  useEffect(()=>{
+    if(!logged)return;
+    const interval=setInterval(fetchOrders,30000);
+    return()=>clearInterval(interval);
+  },[logged]);
+
+  const newCount=orders.filter(o=>o.status==="nouveau").length;
+
   if(!logged)return <LoginPage onLogin={()=>setLogged(true)}/>;
   return <div style={{display:"flex",minHeight:"100vh"}}>
-    <Sidebar page={page} setPage={setPage} onLogout={()=>setLogged(false)}/>
+    <Sidebar page={page} setPage={setPage} onLogout={()=>setLogged(false)} newCount={newCount}/>
     <main style={{marginLeft:220,flex:1,padding:"32px 28px",maxWidth:"calc(100vw - 220px)"}}>
-      {page==="dashboard"&&<DashboardPage orders={orders} setPage={setPage}/>}
-      {page==="orders"&&<OrdersPage orders={orders} setOrders={setOrders}/>}
-      {page==="catalog"&&<CatalogPage products={products} setProducts={setProducts}/>}
-      {page==="settings"&&<SettingsPage/>}
+      {page==="dashboard"&&<DashboardPage orders={orders} setPage={setPage} loading={loadingOrders}/>}
+      {page==="orders"&&<OrdersPage orders={orders} setOrders={setOrders} loading={loadingOrders} reload={fetchOrders}/>}
+      {page==="catalog"&&<CatalogPage products={products} setProducts={setProducts} loading={loadingProducts} reload={fetchProducts}/>}
+      {page==="settings"&&<div className="fade-in" style={{maxWidth:680}}>
+        <div style={{fontFamily:"'Bebas Neue'",fontSize:36,letterSpacing:"0.05em",marginBottom:24}}>Paramètres</div>
+        <Card>
+          <div style={{fontFamily:"'Bebas Neue'",fontSize:20,letterSpacing:"0.05em",marginBottom:16}}>Liens rapides</div>
+          <div style={{display:"flex",flexDirection:"column",gap:12}}>
+            <div style={{padding:"14px 16px",background:C.surface,borderRadius:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div><div style={{fontSize:13,color:C.text1,fontWeight:600}}>🛒 Boutique Telegram</div><div style={{fontSize:11,color:C.text3,fontFamily:"'JetBrains Mono'",marginTop:2}}>anserfj.github.io/telegram-shop</div></div>
+              <Btn variant="ghost" style={{fontSize:12}} onClick={()=>window.open("https://anserfj.github.io/telegram-shop/","_blank")}>Ouvrir</Btn>
+            </div>
+            <div style={{padding:"14px 16px",background:C.surface,borderRadius:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div><div style={{fontSize:13,color:C.text1,fontWeight:600}}>🗄️ Supabase Console</div><div style={{fontSize:11,color:C.text3,fontFamily:"'JetBrains Mono'",marginTop:2}}>hyigrnuoojusixzahjvq.supabase.co</div></div>
+              <Btn variant="ghost" style={{fontSize:12}} onClick={()=>window.open("https://supabase.com/dashboard","_blank")}>Ouvrir</Btn>
+            </div>
+          </div>
+        </Card>
+      </div>}
     </main>
   </div>;
 }
