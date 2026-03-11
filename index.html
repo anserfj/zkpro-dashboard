@@ -21,55 +21,113 @@
     .fade-in{animation:fadeIn .3s ease forwards}
     .scale-in{animation:scaleIn .25s ease forwards}
     .live-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#00e676;animation:pulse 2s infinite}
-    .spinner{width:20px;height:20px;border:2px solid #1e2530;border-top-color:#00e5ff;border-radius:50%;animation:spin .7s linear infinite;margin:auto}
+    .spinner{width:24px;height:24px;border:2px solid #1e2530;border-top-color:#00e5ff;border-radius:50%;animation:spin .7s linear infinite;margin:auto}
   </style>
 </head>
-<body>
-<div id="root"></div>
+<body><div id="root"></div>
 <script type="text/babel">
-const { useState, useEffect, useCallback } = React;
+const { useState, useEffect } = React;
 
-// ── SUPABASE CONFIG ──────────────────────────────
 const SB_URL = "https://hyigrnuoojusixzahjvq.supabase.co";
 const SB_KEY = "sb_publishable_zvgnghWMy0byVdyrIxSafA_i52Nn2f9";
-const SB_H = { "Content-Type":"application/json", "apikey":SB_KEY, "Authorization":`Bearer ${SB_KEY}` };
+const SBH = {"Content-Type":"application/json","apikey":SB_KEY,"Authorization":`Bearer ${SB_KEY}`};
 
-async function sbGet(table, params=""){
-  const r = await fetch(`${SB_URL}/rest/v1/${table}${params}`,{headers:SB_H});
-  if(!r.ok) throw new Error(await r.text());
-  return r.json();
-}
-async function sbPatch(table, id, body, idCol="id"){
-  const r = await fetch(`${SB_URL}/rest/v1/${table}?${idCol}=eq.${encodeURIComponent(id)}`,{method:"PATCH",headers:{...SB_H,"Prefer":"return=minimal"},body:JSON.stringify(body)});
-  if(!r.ok) throw new Error(await r.text());
-}
-async function sbPost(table, body){
-  const r = await fetch(`${SB_URL}/rest/v1/${table}`,{method:"POST",headers:{...SB_H,"Prefer":"return=representation"},body:JSON.stringify(body)});
-  if(!r.ok) throw new Error(await r.text());
-  return r.json();
-}
-async function sbDelete(table, id){
-  const r = await fetch(`${SB_URL}/rest/v1/${table}?id=eq.${id}`,{method:"DELETE",headers:SB_H});
-  if(!r.ok) throw new Error(await r.text());
-}
+async function sbGet(t,p=""){const r=await fetch(`${SB_URL}/rest/v1/${t}${p}`,{headers:SBH});if(!r.ok)throw new Error(await r.text());return r.json();}
+async function sbPatch(t,id,body,col="id"){const r=await fetch(`${SB_URL}/rest/v1/${t}?${col}=eq.${encodeURIComponent(id)}`,{method:"PATCH",headers:{...SBH,"Prefer":"return=minimal"},body:JSON.stringify(body)});if(!r.ok)throw new Error(await r.text());}
+async function sbPost(t,body){const r=await fetch(`${SB_URL}/rest/v1/${t}`,{method:"POST",headers:{...SBH,"Prefer":"return=representation"},body:JSON.stringify(body)});if(!r.ok)throw new Error(await r.text());return r.json();}
+async function sbDelete(t,id){const r=await fetch(`${SB_URL}/rest/v1/${t}?id=eq.${id}`,{method:"DELETE",headers:SBH});if(!r.ok)throw new Error(await r.text());}
 
-// ── PALETTE ──────────────────────────────────────
 const C={bg:"#080a0e",surface:"#0f1318",card:"#141920",border:"#1e2530",accent:"#00e5ff",accentDim:"#00e5ff22",accentMid:"#00e5ff55",gold:"#f0b429",green:"#00e676",red:"#ff4757",orange:"#ff9f43",text1:"#eef2f7",text2:"#8b9ab0",text3:"#4a5568"};
 const STATUS={nouveau:{label:"Nouveau",color:C.accent,bg:C.accentDim},traité:{label:"Traité",color:C.gold,bg:"#f0b42922"},expédié:{label:"Expédié",color:C.green,bg:"#00e67622"},annulé:{label:"Annulé",color:C.red,bg:"#ff475722"}};
-const fmt=n=>parseFloat(n).toFixed(2).replace(".",",")+"\u00a0€";
+const fmt=n=>parseFloat(n||0).toFixed(2).replace(".",",")+"\u00a0€";
 
-// ── MINI COMPONENTS ──────────────────────────────
+/* ── ATOMS ─────────────────────────────────────── */
 function Badge({status}){const c=STATUS[status]||STATUS.nouveau;return <span style={{display:"inline-flex",padding:"3px 10px",borderRadius:4,fontSize:11,fontWeight:600,letterSpacing:"0.06em",textTransform:"uppercase",color:c.color,background:c.bg,border:`1px solid ${c.color}33`}}>{c.label}</span>;}
-function Card({children,style={},onClick}){return <div onClick={onClick} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:20,transition:"border-color .2s",cursor:onClick?"pointer":"default",...style}} onMouseEnter={e=>onClick&&(e.currentTarget.style.borderColor=C.accentMid)} onMouseLeave={e=>onClick&&(e.currentTarget.style.borderColor=C.border)}>{children}</div>;}
-function Btn({children,onClick,variant="primary",style={},disabled}){const v={primary:{background:C.accent,color:C.bg,border:"none"},ghost:{background:"transparent",color:C.text2,border:`1px solid ${C.border}`},danger:{background:"transparent",color:C.red,border:`1px solid ${C.red}44`},gold:{background:C.gold,color:C.bg,border:"none"}};return <button onClick={onClick} disabled={disabled} style={{...v[variant],padding:"8px 16px",borderRadius:8,fontSize:13,fontWeight:600,cursor:disabled?"not-allowed":"pointer",opacity:disabled?.5:1,transition:"opacity .15s",display:"inline-flex",alignItems:"center",gap:6,...style}} onMouseEnter={e=>!disabled&&(e.currentTarget.style.opacity=".8")} onMouseLeave={e=>!disabled&&(e.currentTarget.style.opacity="1")}>{children}</button>;}
-function Inp({label,value,onChange,type="text",placeholder,required,style={}}){return <div style={{display:"flex",flexDirection:"column",gap:6,...style}}>{label&&<label style={{fontSize:12,fontWeight:600,color:C.text2,letterSpacing:"0.06em",textTransform:"uppercase"}}>{label}{required&&<span style={{color:C.red}}> *</span>}</label>}<input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:14,padding:"10px 14px",outline:"none"}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/></div>;}
-function Sel({label,value,onChange,options,style={}}){return <div style={{display:"flex",flexDirection:"column",gap:6,...style}}>{label&&<label style={{fontSize:12,fontWeight:600,color:C.text2,letterSpacing:"0.06em",textTransform:"uppercase"}}>{label}</label>}<select value={value} onChange={e=>onChange(e.target.value)} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:14,padding:"10px 14px",outline:"none",cursor:"pointer"}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}>{options.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</select></div>;}
+function Card({children,style={},onClick}){return <div onClick={onClick} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:20,...style}} onMouseEnter={e=>onClick&&(e.currentTarget.style.borderColor=C.accentMid)} onMouseLeave={e=>onClick&&(e.currentTarget.style.borderColor=C.border)}>{children}</div>;}
+function Btn({children,onClick,variant="primary",style={},disabled}){
+  const v={primary:{background:C.accent,color:C.bg,border:"none"},ghost:{background:"transparent",color:C.text2,border:`1px solid ${C.border}`},danger:{background:"transparent",color:C.red,border:`1px solid ${C.red}44`},gold:{background:C.gold,color:C.bg,border:"none"},green:{background:C.green,color:C.bg,border:"none"}};
+  return <button onClick={onClick} disabled={disabled} style={{...v[variant],padding:"8px 16px",borderRadius:8,fontSize:13,fontWeight:600,cursor:disabled?"not-allowed":"pointer",opacity:disabled?.5:1,transition:"opacity .15s",display:"inline-flex",alignItems:"center",gap:6,...style}} onMouseEnter={e=>!disabled&&(e.currentTarget.style.opacity=".8")} onMouseLeave={e=>!disabled&&(e.currentTarget.style.opacity="1")}>{children}</button>;
+}
+function Inp({label,value,onChange,type="text",placeholder,required,style={},min}){
+  return <div style={{display:"flex",flexDirection:"column",gap:6,...style}}>
+    {label&&<label style={{fontSize:12,fontWeight:600,color:C.text2,letterSpacing:"0.06em",textTransform:"uppercase"}}>{label}{required&&<span style={{color:C.red}}> *</span>}</label>}
+    <input type={type} value={value} min={min} onChange={e=>onChange(e.target.value)} placeholder={placeholder} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:14,padding:"10px 14px",outline:"none"}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+  </div>;
+}
+function Sel({label,value,onChange,options,style={}}){
+  return <div style={{display:"flex",flexDirection:"column",gap:6,...style}}>
+    {label&&<label style={{fontSize:12,fontWeight:600,color:C.text2,letterSpacing:"0.06em",textTransform:"uppercase"}}>{label}</label>}
+    <select value={value} onChange={e=>onChange(e.target.value)} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:14,padding:"10px 14px",outline:"none",cursor:"pointer"}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}>
+      {options.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
+    </select>
+  </div>;
+}
+function StatCard({icon,label,value,sub,color=C.accent,trend}){
+  return <Card style={{display:"flex",flexDirection:"column",gap:12,position:"relative",overflow:"hidden"}}>
+    <div style={{position:"absolute",top:0,right:0,width:80,height:80,background:`radial-gradient(circle at 100% 0%,${color}15 0%,transparent 70%)`}}/>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}><span style={{fontSize:24}}>{icon}</span>{trend!==undefined&&<span style={{fontSize:11,fontWeight:600,color:trend>=0?C.green:C.red}}>{trend>=0?"▲":"▼"} {Math.abs(trend)}%</span>}</div>
+    <div><div style={{fontFamily:"'Bebas Neue'",fontSize:32,color,letterSpacing:"0.03em",lineHeight:1}}>{value}</div><div style={{fontSize:12,color:C.text2,marginTop:4,fontWeight:500}}>{label}</div>{sub&&<div style={{fontSize:11,color:C.text3,marginTop:2}}>{sub}</div>}</div>
+  </Card>;
+}
 
-function StatCard({icon,label,value,sub,color=C.accent,trend}){return <Card style={{display:"flex",flexDirection:"column",gap:12,position:"relative",overflow:"hidden"}}><div style={{position:"absolute",top:0,right:0,width:80,height:80,background:`radial-gradient(circle at 100% 0%,${color}15 0%,transparent 70%)`}}/><div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}><span style={{fontSize:24}}>{icon}</span>{trend!==undefined&&<span style={{fontSize:11,fontWeight:600,color:trend>=0?C.green:C.red}}>{trend>=0?"▲":"▼"} {Math.abs(trend)}%</span>}</div><div><div style={{fontFamily:"'Bebas Neue'",fontSize:32,color,letterSpacing:"0.03em",lineHeight:1}}>{value}</div><div style={{fontSize:12,color:C.text2,marginTop:4,fontWeight:500}}>{label}</div>{sub&&<div style={{fontSize:11,color:C.text3,marginTop:2}}>{sub}</div>}</div></Card>;}
+/* ── GOUTS EDITOR ──────────────────────────────── */
+function GoutsEditor({gouts, onChange}){
+  const [newGout, setNewGout] = useState("");
+  const add=()=>{
+    const g=newGout.trim();
+    if(!g||gouts.includes(g))return;
+    onChange([...gouts,g]);
+    setNewGout("");
+  };
+  const remove=idx=>onChange(gouts.filter((_,i)=>i!==idx));
+  return <div style={{display:"flex",flexDirection:"column",gap:8}}>
+    <label style={{fontSize:12,fontWeight:600,color:C.text2,letterSpacing:"0.06em",textTransform:"uppercase"}}>Goûts disponibles</label>
+    <div style={{display:"flex",flexWrap:"wrap",gap:6,minHeight:36,padding:"8px",background:C.surface,borderRadius:8,border:`1px solid ${C.border}`}}>
+      {gouts.map((g,i)=><span key={i} style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 10px",background:C.accentDim,border:`1px solid ${C.accentMid}`,borderRadius:20,fontSize:12,color:C.accent}}>
+        {g}
+        <button onClick={()=>remove(i)} style={{background:"none",border:"none",color:C.accent,cursor:"pointer",fontSize:14,lineHeight:1,padding:"0 2px"}}>×</button>
+      </span>)}
+      {gouts.length===0&&<span style={{color:C.text3,fontSize:12,alignSelf:"center"}}>Aucun goût (ex: accessoire, recharge)</span>}
+    </div>
+    <div style={{display:"flex",gap:8}}>
+      <input value={newGout} onChange={e=>setNewGout(e.target.value)} placeholder="Ex: Mangue Glacée" onKeyDown={e=>e.key==="Enter"&&add()}
+        style={{flex:1,background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:13,padding:"8px 12px",outline:"none"}}
+        onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+      <Btn onClick={add} style={{padding:"8px 14px",fontSize:12}}>+ Ajouter</Btn>
+    </div>
+  </div>;
+}
 
-// ── LOGIN ────────────────────────────────────────
+/* ── STOCK EDITOR INLINE ───────────────────────── */
+function StockEditor({product, onUpdate}){
+  const [editing, setEditing]=useState(false);
+  const [val, setVal]=useState(String(product.stock));
+  const [saving, setSaving]=useState(false);
+  const save=async()=>{
+    setSaving(true);
+    try{
+      await sbPatch("products",product.id,{stock:parseInt(val)||0});
+      onUpdate({...product,stock:parseInt(val)||0});
+      setEditing(false);
+    }catch(e){alert("Erreur: "+e.message);}
+    setSaving(false);
+  };
+  if(!editing)return <div style={{display:"flex",alignItems:"center",gap:8}}>
+    <span style={{fontSize:18,fontWeight:700,color:product.stock<50?C.orange:C.green}}>{product.stock}</span>
+    <button onClick={()=>{setVal(String(product.stock));setEditing(true);}} style={{background:"none",border:`1px solid ${C.border}`,borderRadius:6,color:C.text3,cursor:"pointer",fontSize:11,padding:"2px 8px"}}>Modifier</button>
+  </div>;
+  return <div style={{display:"flex",alignItems:"center",gap:6}}>
+    <input type="number" value={val} onChange={e=>setVal(e.target.value)} min="0"
+      style={{width:80,background:C.surface,border:`1px solid ${C.accent}`,borderRadius:6,color:C.text1,fontSize:13,padding:"4px 8px",outline:"none"}}
+      onKeyDown={e=>e.key==="Enter"&&save()}/>
+    <Btn onClick={save} disabled={saving} style={{padding:"4px 10px",fontSize:11}}>{saving?"...":"✓"}</Btn>
+    <button onClick={()=>setEditing(false)} style={{background:"none",border:"none",color:C.text3,cursor:"pointer",fontSize:16}}>×</button>
+  </div>;
+}
+
+/* ── LOGIN ─────────────────────────────────────── */
 function LoginPage({onLogin}){
-  const [email,setEmail]=useState(""),[pass,setPass]=useState(""),[ err,setErr]=useState(""),[ loading,setLoading]=useState(false);
+  const [email,setEmail]=useState(""),[pass,setPass]=useState(""),[err,setErr]=useState(""),[loading,setLoading]=useState(false);
   const handle=e=>{e.preventDefault();setLoading(true);setErr("");setTimeout(()=>{if(email==="admin@zkpro.fr"&&pass==="zkpro2025")onLogin();else{setErr("Email ou mot de passe incorrect.");setLoading(false);}},700);};
   return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:C.bg,position:"relative",overflow:"hidden"}}>
     <div style={{position:"absolute",inset:0,opacity:.04,backgroundImage:`linear-gradient(${C.accent} 1px,transparent 1px),linear-gradient(90deg,${C.accent} 1px,transparent 1px)`,backgroundSize:"40px 40px"}}/>
@@ -93,21 +151,15 @@ function LoginPage({onLogin}){
   </div>;
 }
 
-// ── SIDEBAR ──────────────────────────────────────
+/* ── SIDEBAR ───────────────────────────────────── */
 function Sidebar({page,setPage,onLogout,newCount}){
   const nav=[{id:"dashboard",icon:"◈",label:"Dashboard"},{id:"orders",icon:"≡",label:"Commandes"},{id:"catalog",icon:"⊞",label:"Catalogue"},{id:"settings",icon:"⊙",label:"Paramètres"}];
   return <div style={{width:220,minHeight:"100vh",background:C.surface,borderRight:`1px solid ${C.border}`,display:"flex",flexDirection:"column",position:"fixed",left:0,top:0,bottom:0,zIndex:100}}>
-    <div style={{padding:"24px 20px",borderBottom:`1px solid ${C.border}`}}>
-      <div style={{fontFamily:"'Bebas Neue'",fontSize:28,color:C.accent,letterSpacing:"0.1em"}}>ZK PRO</div>
-      <div style={{fontSize:10,color:C.text3,letterSpacing:"0.15em",textTransform:"uppercase",marginTop:2}}>Admin Panel</div>
-    </div>
-    <div style={{padding:"12px 20px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:8}}>
-      <span className="live-dot"/><span style={{fontSize:11,color:C.text3}}>Supabase connecté</span>
-    </div>
+    <div style={{padding:"24px 20px",borderBottom:`1px solid ${C.border}`}}><div style={{fontFamily:"'Bebas Neue'",fontSize:28,color:C.accent,letterSpacing:"0.1em"}}>ZK PRO</div><div style={{fontSize:10,color:C.text3,letterSpacing:"0.15em",textTransform:"uppercase",marginTop:2}}>Admin Panel</div></div>
+    <div style={{padding:"12px 20px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:8}}><span className="live-dot"/><span style={{fontSize:11,color:C.text3}}>Supabase connecté</span></div>
     <nav style={{flex:1,padding:"12px"}}>
       {nav.map(item=><button key={item.id} onClick={()=>setPage(item.id)} style={{display:"flex",alignItems:"center",gap:12,width:"100%",padding:"11px 12px",borderRadius:8,marginBottom:4,background:page===item.id?C.accentDim:"transparent",border:page===item.id?`1px solid ${C.accentMid}`:"1px solid transparent",color:page===item.id?C.accent:C.text2,fontSize:14,fontWeight:500,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}} onMouseEnter={e=>page!==item.id&&(e.currentTarget.style.background="#ffffff08")} onMouseLeave={e=>page!==item.id&&(e.currentTarget.style.background="transparent")}>
-        <span style={{fontSize:18,lineHeight:1,fontFamily:"monospace"}}>{item.icon}</span>
-        <span>{item.label}</span>
+        <span style={{fontSize:18,lineHeight:1,fontFamily:"monospace"}}>{item.icon}</span><span>{item.label}</span>
         {item.id==="orders"&&newCount>0&&<span style={{marginLeft:"auto",background:C.accent,color:C.bg,borderRadius:10,fontSize:10,fontWeight:700,padding:"1px 6px"}}>{newCount}</span>}
       </button>)}
     </nav>
@@ -121,29 +173,26 @@ function Sidebar({page,setPage,onLogout,newCount}){
   </div>;
 }
 
-// ── DASHBOARD ────────────────────────────────────
+/* ── DASHBOARD ─────────────────────────────────── */
 function DashboardPage({orders,setPage,loading}){
-  const active=orders.filter(o=>o.status!=="annulé");
-  const totalCA=active.reduce((s,o)=>s+parseFloat(o.total)+parseFloat(o.livraison),0);
+  const totalCA=orders.filter(o=>o.status!=="annulé").reduce((s,o)=>s+parseFloat(o.total)+parseFloat(o.livraison),0);
   const newOrders=orders.filter(o=>o.status==="nouveau").length;
   const shipped=orders.filter(o=>o.status==="expédié").length;
   return <div className="fade-in" style={{display:"flex",flexDirection:"column",gap:24}}>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-      <div>
-        <div style={{fontFamily:"'Bebas Neue'",fontSize:36,color:C.text1,letterSpacing:"0.05em"}}>Dashboard</div>
-        <div style={{fontSize:13,color:C.text3,marginTop:2}}>Synchronisé avec Supabase · <a href="https://anserfj.github.io/telegram-shop/" target="_blank" style={{color:C.accent,textDecoration:"none"}}>Voir la boutique →</a></div>
-      </div>
+      <div><div style={{fontFamily:"'Bebas Neue'",fontSize:36,color:C.text1,letterSpacing:"0.05em"}}>Dashboard</div>
+      <div style={{fontSize:13,color:C.text3,marginTop:2}}>Synchronisé Supabase · <a href="https://anserfj.github.io/telegram-shop/" target="_blank" style={{color:C.accent,textDecoration:"none"}}>Voir la boutique →</a></div></div>
       <div style={{display:"flex",gap:10}}>
         <Btn variant="ghost" onClick={()=>window.open("https://anserfj.github.io/telegram-shop/","_blank")}>🛒 Boutique</Btn>
-        <Btn onClick={()=>setPage("orders")}>Voir les commandes →</Btn>
+        <Btn onClick={()=>setPage("orders")}>Commandes →</Btn>
       </div>
     </div>
-    {loading?<div style={{padding:40,textAlign:"center"}}><div className="spinner"/></div>:<>
+    {loading?<div style={{padding:60,display:"flex",justifyContent:"center"}}><div className="spinner"/></div>:<>
     <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:16}}>
-      <StatCard icon="💰" label="Chiffre d'affaires" value={fmt(totalCA)} sub="Total commandes actives" color={C.accent} trend={12}/>
-      <StatCard icon="📦" label="Commandes totales" value={String(orders.length)} sub={`${newOrders} nouveau${newOrders>1?"x":""}`} color={C.gold} trend={8}/>
-      <StatCard icon="🚚" label="Expédiées" value={String(shipped)} sub="En cours de livraison" color={C.green} trend={5}/>
-      <StatCard icon="🔔" label="En attente" value={String(newOrders)} sub="À traiter" color={newOrders>0?C.orange:C.text3}/>
+      <StatCard icon="💰" label="Chiffre d'affaires" value={fmt(totalCA)} sub="Commandes actives" color={C.accent} trend={12}/>
+      <StatCard icon="📦" label="Commandes" value={String(orders.length)} sub={`${newOrders} à traiter`} color={C.gold} trend={8}/>
+      <StatCard icon="🚚" label="Expédiées" value={String(shipped)} color={C.green} trend={5}/>
+      <StatCard icon="🔔" label="Nouvelles" value={String(newOrders)} sub="En attente" color={newOrders>0?C.orange:C.text3}/>
     </div>
     <div style={{display:"grid",gridTemplateColumns:"1.6fr 1fr",gap:16}}>
       <Card>
@@ -153,51 +202,45 @@ function DashboardPage({orders,setPage,loading}){
         </div>
         {orders.slice(0,5).map(o=><div key={o.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 12px",background:C.surface,borderRadius:8,border:`1px solid ${C.border}`,marginBottom:8}}>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
-            <div style={{fontFamily:"'JetBrains Mono'",fontSize:11,color:C.accent,fontWeight:500}}>{o.id}</div>
+            <div style={{fontFamily:"'JetBrains Mono'",fontSize:11,color:C.accent}}>{o.id}</div>
             <div style={{fontSize:13,color:C.text2}}>{o.telegram_user}</div>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
-            <span style={{fontSize:13,fontWeight:600,color:C.text1}}>{fmt(parseFloat(o.total)+parseFloat(o.livraison))}</span>
+            <span style={{fontSize:13,fontWeight:600}}>{fmt(parseFloat(o.total)+parseFloat(o.livraison))}</span>
             <Badge status={o.status}/>
           </div>
         </div>)}
       </Card>
       <Card>
-        <div style={{fontFamily:"'Bebas Neue'",fontSize:20,letterSpacing:"0.05em",marginBottom:16}}>Infos boutique</div>
-        <div style={{display:"flex",flexDirection:"column",gap:12}}>
-          <div style={{padding:"12px 14px",background:C.surface,borderRadius:8,fontSize:12}}>
-            <div style={{color:C.text2,marginBottom:4}}>🛒 Boutique Telegram</div>
-            <a href="https://anserfj.github.io/telegram-shop/" target="_blank" style={{color:C.accent,fontSize:11,fontFamily:"'JetBrains Mono'",wordBreak:"break-all",textDecoration:"none"}}>anserfj.github.io/telegram-shop</a>
-          </div>
-          <div style={{padding:"12px 14px",background:C.surface,borderRadius:8,fontSize:12}}>
-            <div style={{color:C.text2,marginBottom:4}}>🗄️ Base de données</div>
-            <div style={{color:C.green,fontSize:11,fontFamily:"'JetBrains Mono'"}}>● Supabase connecté</div>
-          </div>
-          <div style={{padding:"12px 14px",background:C.surface,borderRadius:8,fontSize:12}}>
-            <div style={{color:C.text2,marginBottom:6}}>📊 Répartition commandes</div>
-            {Object.entries(STATUS).map(([k,v])=>{const n=orders.filter(o=>o.status===k).length;return <div key={k} style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{color:v.color,fontSize:11}}>{v.label}</span><span style={{color:C.text3,fontSize:11,fontFamily:"'JetBrains Mono'"}}>{n}</span></div>;})}
-          </div>
-        </div>
+        <div style={{fontFamily:"'Bebas Neue'",fontSize:20,letterSpacing:"0.05em",marginBottom:16}}>Répartition statuts</div>
+        {Object.entries(STATUS).map(([k,v])=>{
+          const n=orders.filter(o=>o.status===k).length;
+          const pct=orders.length?Math.round(n/orders.length*100):0;
+          return <div key={k} style={{marginBottom:14}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+              <span style={{color:v.color,fontSize:12,fontWeight:600}}>{v.label}</span>
+              <span style={{color:C.text3,fontSize:11,fontFamily:"'JetBrains Mono'"}}>{n} cmd</span>
+            </div>
+            <div style={{height:4,background:C.border,borderRadius:2}}><div style={{height:"100%",width:`${pct}%`,background:v.color,borderRadius:2,transition:"width .5s ease"}}/></div>
+          </div>;
+        })}
       </Card>
     </div>
     </>}
   </div>;
 }
 
-// ── ORDERS ───────────────────────────────────────
+/* ── ORDERS ────────────────────────────────────── */
 function OrdersPage({orders,setOrders,loading,reload}){
-  const [filter,setFilter]=useState("tous"),[ selected,setSelected]=useState(null),[ search,setSearch]=useState(""),[ updating,setUpdating]=useState(false);
-  const filtered=orders.filter(o=>{
-    if(filter!=="tous"&&o.status!==filter)return false;
-    if(search&&!o.id.toLowerCase().includes(search.toLowerCase())&&!o.telegram_user.toLowerCase().includes(search.toLowerCase()))return false;
-    return true;
-  });
+  const [filter,setFilter]=useState("tous"),[selected,setSelected]=useState(null),[search,setSearch]=useState(""),[updating,setUpdating]=useState(false);
+  const filtered=orders.filter(o=>(filter==="tous"||o.status===filter)&&(!search||o.id.toLowerCase().includes(search.toLowerCase())||o.telegram_user.toLowerCase().includes(search.toLowerCase())));
   const updateStatus=async(id,status)=>{
     setUpdating(true);
-    try{await sbPatch("orders",id,{status});setOrders(prev=>prev.map(o=>o.id===id?{...o,status}:o));setSelected(prev=>prev&&prev.id===id?{...prev,status}:prev);}
+    try{await sbPatch("orders",id,{status});setOrders(prev=>prev.map(o=>o.id===id?{...o,status}:o));setSelected(prev=>prev?.id===id?{...prev,status}:prev);}
     catch(e){alert("Erreur: "+e.message);}
     setUpdating(false);
   };
+  const parseItems=items=>{try{return Array.isArray(items)?items:JSON.parse(items||"[]");}catch{return[];}};
   return <div className="fade-in" style={{display:"flex",flexDirection:"column",gap:20}}>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
       <div style={{fontFamily:"'Bebas Neue'",fontSize:36,letterSpacing:"0.05em"}}>Commandes</div>
@@ -209,9 +252,9 @@ function OrdersPage({orders,setOrders,loading,reload}){
         {["tous","nouveau","traité","expédié","annulé"].map(s=><button key={s} onClick={()=>setFilter(s)} style={{padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:600,cursor:"pointer",textTransform:"capitalize",background:filter===s?C.accent:"transparent",color:filter===s?C.bg:C.text2,border:`1px solid ${filter===s?C.accent:C.border}`,fontFamily:"'DM Sans',sans-serif"}}>{s}</button>)}
       </div>
     </div>
-    {loading?<div style={{padding:40,textAlign:"center"}}><div className="spinner"/></div>:
+    {loading?<div style={{padding:60,display:"flex",justifyContent:"center"}}><div className="spinner"/></div>:
     <div style={{display:"flex",gap:16}}>
-      <div style={{flex:1}}>
+      <div style={{flex:1,minWidth:0}}>
         <Card style={{padding:0,overflow:"hidden"}}>
           <table style={{width:"100%",borderCollapse:"collapse"}}>
             <thead><tr style={{borderBottom:`1px solid ${C.border}`}}>{["ID","Client","Date","Montant","Statut","Actions"].map(h=><th key={h} style={{padding:"12px 16px",textAlign:"left",fontSize:11,color:C.text3,fontWeight:600,letterSpacing:"0.08em",textTransform:"uppercase"}}>{h}</th>)}</tr></thead>
@@ -220,12 +263,12 @@ function OrdersPage({orders,setOrders,loading,reload}){
                 <td style={{padding:"12px 16px",fontFamily:"'JetBrains Mono'",fontSize:12,color:C.accent}}>{o.id}</td>
                 <td style={{padding:"12px 16px",fontSize:13,color:C.text1}}>{o.telegram_user}</td>
                 <td style={{padding:"12px 16px",fontSize:12,color:C.text3,fontFamily:"'JetBrains Mono'"}}>{new Date(o.created_at).toLocaleDateString("fr-FR")}</td>
-                <td style={{padding:"12px 16px",fontSize:13,fontWeight:600,color:C.text1}}>{fmt(parseFloat(o.total)+parseFloat(o.livraison))}</td>
+                <td style={{padding:"12px 16px",fontSize:13,fontWeight:600}}>{fmt(parseFloat(o.total)+parseFloat(o.livraison))}</td>
                 <td style={{padding:"12px 16px"}}><Badge status={o.status}/></td>
                 <td style={{padding:"12px 16px"}}>
                   <div style={{display:"flex",gap:6}}>
                     {o.status==="nouveau"&&<Btn variant="gold" style={{padding:"4px 10px",fontSize:11}} disabled={updating} onClick={e=>{e.stopPropagation();updateStatus(o.id,"traité");}}>✓ Traiter</Btn>}
-                    {o.status==="traité"&&<Btn variant="primary" style={{padding:"4px 10px",fontSize:11}} disabled={updating} onClick={e=>{e.stopPropagation();updateStatus(o.id,"expédié");}}>🚚 Expédier</Btn>}
+                    {o.status==="traité"&&<Btn style={{padding:"4px 10px",fontSize:11}} disabled={updating} onClick={e=>{e.stopPropagation();updateStatus(o.id,"expédié");}}>🚚 Expédier</Btn>}
                   </div>
                 </td>
               </tr>)}
@@ -234,7 +277,7 @@ function OrdersPage({orders,setOrders,loading,reload}){
           {filtered.length===0&&<div style={{padding:40,textAlign:"center",color:C.text3,fontSize:14}}>Aucune commande trouvée</div>}
         </Card>
       </div>
-      {selected&&<div className="scale-in" style={{width:300,flexShrink:0}}>
+      {selected&&<div className="scale-in" style={{width:310,flexShrink:0}}>
         <Card style={{padding:20}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
             <div style={{fontFamily:"'JetBrains Mono'",fontSize:13,color:C.accent}}>{selected.id}</div>
@@ -243,20 +286,21 @@ function OrdersPage({orders,setOrders,loading,reload}){
           <div style={{display:"flex",flexDirection:"column",gap:16}}>
             <div>
               <div style={{fontSize:11,color:C.text3,marginBottom:4,textTransform:"uppercase",letterSpacing:"0.08em"}}>Client Telegram</div>
-              <div style={{fontSize:15,fontWeight:600,color:C.text1}}>{selected.telegram_user}</div>
+              <div style={{fontSize:15,fontWeight:600}}>{selected.telegram_user}</div>
               <div style={{fontSize:11,color:C.text3,marginTop:2}}>{new Date(selected.created_at).toLocaleString("fr-FR")}</div>
             </div>
             <div style={{borderTop:`1px solid ${C.border}`,paddingTop:16}}>
-              <div style={{fontSize:11,color:C.text3,marginBottom:10,textTransform:"uppercase",letterSpacing:"0.08em"}}>Articles commandés</div>
-              {(Array.isArray(selected.items)?selected.items:JSON.parse(selected.items||"[]")).map((item,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
-                <div><div style={{fontSize:12,color:C.text1}}>{item.name}</div><div style={{fontSize:11,color:C.text3}}>×{item.qty} × {fmt(item.price)}</div></div>
-                <div style={{fontSize:13,fontWeight:600,color:C.text1}}>{fmt(item.qty*item.price)}</div>
+              <div style={{fontSize:11,color:C.text3,marginBottom:10,textTransform:"uppercase",letterSpacing:"0.08em"}}>Articles</div>
+              {parseItems(selected.items).map((item,i)=><div key={i} style={{marginBottom:10,padding:"8px 10px",background:C.surface,borderRadius:8}}>
+                <div style={{fontSize:12,fontWeight:600,color:C.text1}}>{item.name}</div>
+                {item.gout&&<div style={{fontSize:11,color:C.accent,marginTop:2}}>🍬 {item.gout}</div>}
+                <div style={{fontSize:11,color:C.text3,marginTop:3}}>×{item.qty} × {fmt(item.price)} = <strong style={{color:C.text2}}>{fmt(item.qty*item.price)}</strong></div>
               </div>)}
             </div>
             <div style={{borderTop:`1px solid ${C.border}`,paddingTop:12}}>
               <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{fontSize:12,color:C.text2}}>Sous-total</span><span style={{fontSize:12,color:C.text2}}>{fmt(selected.total)}</span></div>
               <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}><span style={{fontSize:12,color:C.text2}}>Livraison</span><span style={{fontSize:12,color:parseFloat(selected.livraison)===0?C.green:C.text2}}>{parseFloat(selected.livraison)===0?"OFFERTE":fmt(selected.livraison)}</span></div>
-              <div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontWeight:700,color:C.text1}}>Total TTC</span><span style={{fontWeight:700,color:C.accent,fontSize:16}}>{fmt(parseFloat(selected.total)+parseFloat(selected.livraison))}</span></div>
+              <div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontWeight:700}}>Total TTC</span><span style={{fontWeight:700,color:C.accent,fontSize:16}}>{fmt(parseFloat(selected.total)+parseFloat(selected.livraison))}</span></div>
             </div>
             <div>
               <div style={{fontSize:11,color:C.text3,marginBottom:8,textTransform:"uppercase",letterSpacing:"0.08em"}}>Changer le statut</div>
@@ -271,127 +315,163 @@ function OrdersPage({orders,setOrders,loading,reload}){
   </div>;
 }
 
-// ── CATALOG ──────────────────────────────────────
+/* ── CATALOG ───────────────────────────────────── */
+const EMPTY_FORM={name:"",cat:"puff",emoji:"💨",price:"",unit:"/ unité",min_qty:"10",badge:"",stock:"",gouts:[]};
+
 function CatalogPage({products,setProducts,loading,reload}){
-  const [filter,setFilter]=useState("tous"),[ modal,setModal]=useState(null),[ form,setForm]=useState({name:"",cat:"puff",emoji:"💨",price:"",unit:"/ unité",min_qty:"10",badge:"",stock:""}),[ saving,setSaving]=useState(false),[ toast,setToast]=useState("");
+  const [filter,setFilter]=useState("tous");
+  const [modal,setModal]=useState(null);
+  const [form,setForm]=useState(EMPTY_FORM);
+  const [saving,setSaving]=useState(false);
+  const [toast,setToast]=useState("");
+
   const showToast=msg=>{setToast(msg);setTimeout(()=>setToast(""),2500);};
-  const openNew=()=>{setForm({name:"",cat:"puff",emoji:"💨",price:"",unit:"/ unité",min_qty:"10",badge:"",stock:""});setModal("new");};
-  const openEdit=p=>{setForm({name:p.name,cat:p.cat,emoji:p.emoji||"💨",price:String(p.price),unit:p.unit,min_qty:String(p.min_qty),badge:p.badge||"",stock:String(p.stock)});setModal(p);};
+  const openNew=()=>{setForm(EMPTY_FORM);setModal("new");};
+  const openEdit=p=>{
+    setForm({name:p.name,cat:p.cat,emoji:p.emoji||"💨",price:String(p.price),unit:p.unit,min_qty:String(p.min_qty),badge:p.badge||"",stock:String(p.stock),gouts:Array.isArray(p.gouts)?p.gouts:(p.gouts?JSON.parse(p.gouts):[])});
+    setModal(p);
+  };
+
   const save=async()=>{
     if(!form.name||!form.price)return;
     setSaving(true);
-    const body={name:form.name,cat:form.cat,emoji:form.emoji,price:parseFloat(form.price),unit:form.unit,min_qty:parseInt(form.min_qty)||1,stock:parseInt(form.stock)||0,badge:form.badge||null};
+    const body={name:form.name,cat:form.cat,emoji:form.emoji,price:parseFloat(form.price),unit:form.unit,min_qty:parseInt(form.min_qty)||1,stock:parseInt(form.stock)||0,badge:form.badge||null,gouts:form.gouts};
     try{
-      if(modal==="new"){const [r]=await sbPost("products",body);setProducts(prev=>[...prev,{...r,min_qty:r.min_qty}]);showToast("✅ Produit ajouté !");}
+      if(modal==="new"){const [r]=await sbPost("products",body);setProducts(prev=>[...prev,r]);showToast("✅ Produit ajouté !");}
       else{await sbPatch("products",modal.id,body);setProducts(prev=>prev.map(p=>p.id===modal.id?{...p,...body}:p));showToast("✅ Produit modifié !");}
       setModal(null);
     }catch(e){alert("Erreur: "+e.message);}
     setSaving(false);
   };
+
   const remove=async id=>{
     if(!confirm("Supprimer ce produit ?"))return;
     try{await sbDelete("products",id);setProducts(prev=>prev.filter(p=>p.id!==id));showToast("🗑️ Produit supprimé");}
     catch(e){alert("Erreur: "+e.message);}
   };
+
+  const updateProduct=updated=>setProducts(prev=>prev.map(p=>p.id===updated.id?updated:p));
+
   const filtered=filter==="tous"?products:products.filter(p=>p.cat===filter);
-  const sf={padding:"7px 16px",borderRadius:8,fontSize:12,fontWeight:600,cursor:"pointer",textTransform:"capitalize",fontFamily:"'DM Sans',sans-serif"};
+  const sf={padding:"7px 16px",borderRadius:8,fontSize:12,fontWeight:600,cursor:"pointer",textTransform:"capitalize",fontFamily:"'DM Sans',sans-serif",transition:"all .15s"};
+
   return <div className="fade-in" style={{display:"flex",flexDirection:"column",gap:20,position:"relative"}}>
-    {toast&&<div style={{position:"fixed",bottom:24,right:24,background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 20px",fontSize:14,color:C.text1,zIndex:999}}>{toast}</div>}
+    {toast&&<div style={{position:"fixed",bottom:24,right:24,background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 20px",fontSize:14,color:C.text1,zIndex:999,boxShadow:"0 8px 32px #00000080"}}>{toast}</div>}
+
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
       <div>
         <div style={{fontFamily:"'Bebas Neue'",fontSize:36,letterSpacing:"0.05em"}}>Catalogue</div>
-        <div style={{fontSize:12,color:C.text3,marginTop:2}}>Synchronisé avec la boutique Telegram en temps réel</div>
+        <div style={{fontSize:12,color:C.text3,marginTop:2}}>Modifications visibles en temps réel sur la boutique</div>
       </div>
       <div style={{display:"flex",gap:10}}>
         <Btn variant="ghost" onClick={reload}>🔄 Actualiser</Btn>
-        <Btn onClick={openNew}>+ Ajouter un produit</Btn>
+        <Btn onClick={openNew}>+ Nouveau produit</Btn>
       </div>
     </div>
-    <div style={{display:"flex",gap:8}}>
+
+    <div style={{display:"flex",gap:8,alignItems:"center"}}>
       {["tous","puff","recharge","accessoire"].map(c=><button key={c} onClick={()=>setFilter(c)} style={{...sf,background:filter===c?C.accent:"transparent",color:filter===c?C.bg:C.text2,border:`1px solid ${filter===c?C.accent:C.border}`}}>{c}</button>)}
-      <span style={{marginLeft:"auto",color:C.text3,fontSize:13,alignSelf:"center"}}>{filtered.length} produit{filtered.length>1?"s":""}</span>
+      <span style={{marginLeft:"auto",color:C.text3,fontSize:13}}>{filtered.length} produit{filtered.length>1?"s":""}</span>
     </div>
-    {loading?<div style={{padding:40,textAlign:"center"}}><div className="spinner"/></div>:
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))",gap:14}}>
-      {filtered.map(p=><Card key={p.id} style={{padding:16}}>
-        <div style={{display:"flex",alignItems:"flex-start",gap:12,marginBottom:14}}>
-          <div style={{fontSize:32,lineHeight:1}}>{p.emoji||"💨"}</div>
-          <div style={{flex:1}}>
-            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
-              <span style={{fontSize:10,color:C.text3,textTransform:"uppercase",letterSpacing:"0.08em"}}>{p.cat}</span>
-              {p.badge&&<span style={{fontSize:9,padding:"1px 6px",borderRadius:3,background:C.accentDim,color:C.accent,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase"}}>{p.badge}</span>}
+
+    {loading?<div style={{padding:60,display:"flex",justifyContent:"center"}}><div className="spinner"/></div>:
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:14}}>
+      {filtered.map(p=>{
+        const gouts=Array.isArray(p.gouts)?p.gouts:(p.gouts?JSON.parse(p.gouts):[]);
+        return <Card key={p.id} style={{padding:16}}>
+          <div style={{display:"flex",alignItems:"flex-start",gap:12,marginBottom:14}}>
+            <div style={{fontSize:32,lineHeight:1}}>{p.emoji||"💨"}</div>
+            <div style={{flex:1}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
+                <span style={{fontSize:10,color:C.text3,textTransform:"uppercase",letterSpacing:"0.08em"}}>{p.cat}</span>
+                {p.badge&&<span style={{fontSize:9,padding:"1px 6px",borderRadius:3,background:C.accentDim,color:C.accent,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase"}}>{p.badge}</span>}
+              </div>
+              <div style={{fontSize:13,fontWeight:600,lineHeight:1.3}}>{p.name}</div>
             </div>
-            <div style={{fontSize:13,fontWeight:600,color:C.text1,lineHeight:1.3}}>{p.name}</div>
           </div>
-        </div>
-        <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}>
-          <div><div style={{fontFamily:"'Bebas Neue'",fontSize:22,color:C.accent,letterSpacing:"0.03em"}}>{fmt(p.price)}</div><div style={{fontSize:10,color:C.text3}}>{p.unit} · min. {p.min_qty}</div></div>
-          <div style={{textAlign:"right"}}><div style={{fontSize:18,fontWeight:700,color:p.stock<50?C.orange:C.green}}>{p.stock}</div><div style={{fontSize:10,color:C.text3}}>en stock</div></div>
-        </div>
-        <div style={{display:"flex",gap:8}}>
-          <Btn variant="ghost" style={{flex:1,justifyContent:"center",fontSize:12,padding:"6px 10px"}} onClick={()=>openEdit(p)}>✏️ Modifier</Btn>
-          <Btn variant="danger" style={{padding:"6px 10px",fontSize:12}} onClick={()=>remove(p.id)}>🗑️</Btn>
-        </div>
-      </Card>)}
+
+          {/* Prix + stock */}
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:10}}>
+            <div>
+              <div style={{fontFamily:"'Bebas Neue'",fontSize:22,color:C.accent,letterSpacing:"0.03em"}}>{fmt(p.price)}</div>
+              <div style={{fontSize:10,color:C.text3}}>{p.unit} · min. {p.min_qty}</div>
+            </div>
+            <div style={{textAlign:"right"}}>
+              <div style={{fontSize:10,color:C.text3,marginBottom:4}}>Stock</div>
+              <StockEditor product={p} onUpdate={updateProduct}/>
+            </div>
+          </div>
+
+          {/* Goûts */}
+          {gouts.length>0&&<div style={{marginBottom:12,padding:"8px 10px",background:C.surface,borderRadius:8}}>
+            <div style={{fontSize:10,color:C.text3,marginBottom:6,textTransform:"uppercase",letterSpacing:"0.06em"}}>Goûts ({gouts.length})</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+              {gouts.slice(0,5).map((g,i)=><span key={i} style={{fontSize:10,padding:"2px 8px",background:C.accentDim,color:C.accent,borderRadius:10}}>{g}</span>)}
+              {gouts.length>5&&<span style={{fontSize:10,color:C.text3}}>+{gouts.length-5} autres</span>}
+            </div>
+          </div>}
+
+          <div style={{display:"flex",gap:8}}>
+            <Btn variant="ghost" style={{flex:1,justifyContent:"center",fontSize:12,padding:"6px 10px"}} onClick={()=>openEdit(p)}>✏️ Modifier</Btn>
+            <Btn variant="danger" style={{padding:"6px 10px",fontSize:12}} onClick={()=>remove(p.id)}>🗑️</Btn>
+          </div>
+        </Card>;
+      })}
     </div>}
-    {modal&&<div style={{position:"fixed",inset:0,background:"#000000bb",display:"flex",alignItems:"center",justifyContent:"center",zIndex:500}} onClick={()=>setModal(null)}>
-      <div className="scale-in" style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:28,width:460,maxWidth:"90vw"}} onClick={e=>e.stopPropagation()}>
+
+    {/* MODAL PRODUIT */}
+    {modal&&<div style={{position:"fixed",inset:0,background:"#000000cc",display:"flex",alignItems:"center",justifyContent:"center",zIndex:500,padding:16}} onClick={()=>setModal(null)}>
+      <div className="scale-in" style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:28,width:520,maxWidth:"100%",maxHeight:"90vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
         <div style={{fontFamily:"'Bebas Neue'",fontSize:24,letterSpacing:"0.05em",marginBottom:24}}>{modal==="new"?"Nouveau produit":"Modifier le produit"}</div>
-        <div style={{display:"flex",flexDirection:"column",gap:14}}>
-          <div style={{display:"grid",gridTemplateColumns:"80px 1fr",gap:12}}><Inp label="Emoji" value={form.emoji} onChange={v=>setForm(f=>({...f,emoji:v}))}/><Inp label="Nom du produit" value={form.name} onChange={v=>setForm(f=>({...f,name:v}))} required/></div>
+
+        <div style={{display:"flex",flexDirection:"column",gap:16}}>
+          <div style={{display:"grid",gridTemplateColumns:"80px 1fr",gap:12}}>
+            <Inp label="Emoji" value={form.emoji} onChange={v=>setForm(f=>({...f,emoji:v}))}/>
+            <Inp label="Nom du modèle" value={form.name} onChange={v=>setForm(f=>({...f,name:v}))} placeholder="Ex: Elf Bar 600" required/>
+          </div>
+
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
             <Sel label="Catégorie" value={form.cat} onChange={v=>setForm(f=>({...f,cat:v}))} options={[{value:"puff",label:"Puff"},{value:"recharge",label:"Recharge"},{value:"accessoire",label:"Accessoire"}]}/>
-            <Sel label="Badge" value={form.badge} onChange={v=>setForm(f=>({...f,badge:v}))} options={[{value:"",label:"Aucun"},{value:"new",label:"Nouveau"},{value:"promo",label:"Promo"},{value:"top",label:"Top"},{value:"stock",label:"Stock !"}]}/>
+            <Sel label="Badge" value={form.badge} onChange={v=>setForm(f=>({...f,badge:v}))} options={[{value:"",label:"Aucun"},{value:"new",label:"🆕 Nouveau"},{value:"promo",label:"🔥 Promo"},{value:"top",label:"⭐ Top"},{value:"stock",label:"⚠️ Stock faible"}]}/>
           </div>
+
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
-            <Inp label="Prix (€)" type="number" value={form.price} onChange={v=>setForm(f=>({...f,price:v}))} required/>
-            <Inp label="Qté min." type="number" value={form.min_qty} onChange={v=>setForm(f=>({...f,min_qty:v}))}/>
-            <Inp label="Stock" type="number" value={form.stock} onChange={v=>setForm(f=>({...f,stock:v}))}/>
+            <Inp label="Prix (€)" type="number" value={form.price} onChange={v=>setForm(f=>({...f,price:v}))} placeholder="3.50" required min="0"/>
+            <Inp label="Qté minimum" type="number" value={form.min_qty} onChange={v=>setForm(f=>({...f,min_qty:v}))} placeholder="10" min="1"/>
+            <Inp label="Stock initial" type="number" value={form.stock} onChange={v=>setForm(f=>({...f,stock:v}))} placeholder="0" min="0"/>
           </div>
+
           <Inp label="Unité (affichage)" value={form.unit} onChange={v=>setForm(f=>({...f,unit:v}))} placeholder="/ unité"/>
+
+          {/* Éditeur de goûts */}
+          <GoutsEditor gouts={form.gouts} onChange={gouts=>setForm(f=>({...f,gouts}))}/>
         </div>
+
         <div style={{display:"flex",gap:10,marginTop:24,justifyContent:"flex-end"}}>
           <Btn variant="ghost" onClick={()=>setModal(null)}>Annuler</Btn>
-          <Btn onClick={save} disabled={saving||!form.name||!form.price}>{saving?"Sauvegarde...":modal==="new"?"Créer le produit":"Enregistrer"}</Btn>
+          <Btn onClick={save} disabled={saving||!form.name||!form.price}>
+            {saving?"Sauvegarde...":modal==="new"?"✅ Créer le produit":"✅ Enregistrer"}
+          </Btn>
         </div>
       </div>
     </div>}
   </div>;
 }
 
-// ── APP ───────────────────────────────────────────
+/* ── APP ───────────────────────────────────────── */
 function App(){
   const [logged,setLogged]=useState(false);
   const [page,setPage]=useState("dashboard");
   const [orders,setOrders]=useState([]);
   const [products,setProducts]=useState([]);
-  const [loadingOrders,setLoadingOrders]=useState(false);
-  const [loadingProducts,setLoadingProducts]=useState(false);
+  const [loadO,setLoadO]=useState(false);
+  const [loadP,setLoadP]=useState(false);
 
-  const fetchOrders=async()=>{
-    setLoadingOrders(true);
-    try{const d=await sbGet("orders","?order=created_at.desc");setOrders(d);}
-    catch(e){console.error("Orders error:",e);}
-    setLoadingOrders(false);
-  };
+  const fetchOrders=async()=>{setLoadO(true);try{setOrders(await sbGet("orders","?order=created_at.desc"));}catch(e){console.error(e);}setLoadO(false);};
+  const fetchProducts=async()=>{setLoadP(true);try{setProducts(await sbGet("products","?order=id.asc"));}catch(e){console.error(e);}setLoadP(false);};
 
-  const fetchProducts=async()=>{
-    setLoadingProducts(true);
-    try{const d=await sbGet("products","?order=id.asc");setProducts(d);}
-    catch(e){console.error("Products error:",e);}
-    setLoadingProducts(false);
-  };
-
-  useEffect(()=>{
-    if(logged){fetchOrders();fetchProducts();}
-  },[logged]);
-
-  // Auto-refresh toutes les 30s pour les nouvelles commandes
-  useEffect(()=>{
-    if(!logged)return;
-    const interval=setInterval(fetchOrders,30000);
-    return()=>clearInterval(interval);
-  },[logged]);
+  useEffect(()=>{if(logged){fetchOrders();fetchProducts();}}, [logged]);
+  useEffect(()=>{if(!logged)return;const t=setInterval(fetchOrders,30000);return()=>clearInterval(t);},[logged]);
 
   const newCount=orders.filter(o=>o.status==="nouveau").length;
 
@@ -399,22 +479,19 @@ function App(){
   return <div style={{display:"flex",minHeight:"100vh"}}>
     <Sidebar page={page} setPage={setPage} onLogout={()=>setLogged(false)} newCount={newCount}/>
     <main style={{marginLeft:220,flex:1,padding:"32px 28px",maxWidth:"calc(100vw - 220px)"}}>
-      {page==="dashboard"&&<DashboardPage orders={orders} setPage={setPage} loading={loadingOrders}/>}
-      {page==="orders"&&<OrdersPage orders={orders} setOrders={setOrders} loading={loadingOrders} reload={fetchOrders}/>}
-      {page==="catalog"&&<CatalogPage products={products} setProducts={setProducts} loading={loadingProducts} reload={fetchProducts}/>}
+      {page==="dashboard"&&<DashboardPage orders={orders} setPage={setPage} loading={loadO}/>}
+      {page==="orders"&&<OrdersPage orders={orders} setOrders={setOrders} loading={loadO} reload={fetchOrders}/>}
+      {page==="catalog"&&<CatalogPage products={products} setProducts={setProducts} loading={loadP} reload={fetchProducts}/>}
       {page==="settings"&&<div className="fade-in" style={{maxWidth:680}}>
         <div style={{fontFamily:"'Bebas Neue'",fontSize:36,letterSpacing:"0.05em",marginBottom:24}}>Paramètres</div>
         <Card>
           <div style={{fontFamily:"'Bebas Neue'",fontSize:20,letterSpacing:"0.05em",marginBottom:16}}>Liens rapides</div>
           <div style={{display:"flex",flexDirection:"column",gap:12}}>
-            <div style={{padding:"14px 16px",background:C.surface,borderRadius:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div><div style={{fontSize:13,color:C.text1,fontWeight:600}}>🛒 Boutique Telegram</div><div style={{fontSize:11,color:C.text3,fontFamily:"'JetBrains Mono'",marginTop:2}}>anserfj.github.io/telegram-shop</div></div>
-              <Btn variant="ghost" style={{fontSize:12}} onClick={()=>window.open("https://anserfj.github.io/telegram-shop/","_blank")}>Ouvrir</Btn>
-            </div>
-            <div style={{padding:"14px 16px",background:C.surface,borderRadius:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div><div style={{fontSize:13,color:C.text1,fontWeight:600}}>🗄️ Supabase Console</div><div style={{fontSize:11,color:C.text3,fontFamily:"'JetBrains Mono'",marginTop:2}}>hyigrnuoojusixzahjvq.supabase.co</div></div>
-              <Btn variant="ghost" style={{fontSize:12}} onClick={()=>window.open("https://supabase.com/dashboard","_blank")}>Ouvrir</Btn>
-            </div>
+            {[{label:"🛒 Boutique Telegram",url:"https://anserfj.github.io/telegram-shop/",sub:"anserfj.github.io/telegram-shop"},{label:"🗄️ Supabase Console",url:"https://supabase.com/dashboard",sub:"hyigrnuoojusixzahjvq.supabase.co"}].map(l=>
+            <div key={l.url} style={{padding:"14px 16px",background:C.surface,borderRadius:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div><div style={{fontSize:13,fontWeight:600}}>{l.label}</div><div style={{fontSize:11,color:C.text3,fontFamily:"'JetBrains Mono'",marginTop:2}}>{l.sub}</div></div>
+              <Btn variant="ghost" style={{fontSize:12}} onClick={()=>window.open(l.url,"_blank")}>Ouvrir</Btn>
+            </div>)}
           </div>
         </Card>
       </div>}
