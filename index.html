@@ -97,71 +97,116 @@ function MediaPreview({url, style={}}){
   return <img src={url} style={{width:"100%",borderRadius:8,objectFit:"cover",...style}} alt=""/>;
 }
 
-/* ── MEDIA UPLOADER ── */
-function MediaUploader({label, url, onUrl, accept="image/*,video/*", folder="photos", hint}){
+/* ── GALERIE LIBRE ── */
+// medias = [{url, type: "image"|"video"}]
+// Le 1er élément = vignette principale dans le catalogue
+function GalerieEditor({medias, onChange}){
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [urlInput, setUrlInput] = useState("");
-  const [showUrl, setShowUrl] = useState(false);
+  const [urlInput, setUrlInput]   = useState("");
+  const [showUrl,  setShowUrl]    = useState(false);
   const fileRef = useRef();
 
-  const handleFile = async(file) => {
-    if(!file) return;
+  const addUrl = url => {
+    if(!url) return;
+    const type = isVideo(url) ? "video" : "image";
+    onChange([...medias, {url, type}]);
+  };
+
+  const handleFiles = async(files) => {
+    if(!files.length) return;
     setUploading(true);
     try {
-      const uploaded = await uploadFile(file, folder);
-      onUrl(uploaded);
-    } catch(e) { alert("Erreur upload: " + e.message); }
+      const uploaded = [];
+      for(const file of Array.from(files)){
+        const folder = file.type.startsWith("video") ? "videos" : "photos";
+        const url    = await uploadFile(file, folder);
+        const type   = file.type.startsWith("video") ? "video" : "image";
+        uploaded.push({url, type});
+      }
+      onChange([...medias, ...uploaded]);
+    } catch(e){ alert("Erreur upload : " + e.message); }
     setUploading(false);
   };
 
-  const handleDrop = e => {
-    e.preventDefault(); setDragging(false);
-    handleFile(e.dataTransfer.files[0]);
+  const remove = idx => onChange(medias.filter((_,i)=>i!==idx));
+  const moveFirst = idx => {
+    const copy = [...medias];
+    const [item] = copy.splice(idx,1);
+    onChange([item, ...copy]);
   };
 
   const applyUrl = () => {
-    if(urlInput.trim()) { onUrl(urlInput.trim()); setUrlInput(""); setShowUrl(false); }
+    const u = urlInput.trim();
+    if(u){ addUrl(u); setUrlInput(""); setShowUrl(false); }
   };
 
-  return <div style={{display:"flex",flexDirection:"column",gap:8}}>
-    {label&&<label style={{fontSize:12,fontWeight:600,color:C.text2,letterSpacing:"0.06em",textTransform:"uppercase"}}>{label}</label>}
+  return <div style={{display:"flex",flexDirection:"column",gap:12}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+      <label style={{fontSize:12,fontWeight:600,color:C.text2,letterSpacing:"0.06em",textTransform:"uppercase"}}>
+        📸 Médias du produit
+      </label>
+      <span style={{fontSize:11,color:C.text3}}>
+        {medias.length === 0 ? "Aucun média" : `${medias.length} fichier${medias.length>1?"s":""} · Le 1er = vignette principale`}
+      </span>
+    </div>
 
-    {/* Aperçu actuel */}
-    {url && <div style={{position:"relative"}}>
-      <MediaPreview url={url} style={{maxHeight:160}}/>
-      <button onClick={()=>onUrl("")} style={{position:"absolute",top:6,right:6,background:"#000000aa",border:"none",borderRadius:6,color:"#fff",cursor:"pointer",fontSize:12,padding:"3px 8px"}}>✕ Supprimer</button>
+    {/* Grille des médias ajoutés */}
+    {medias.length > 0 && <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(120px,1fr))",gap:8}}>
+      {medias.map((m,i) => (
+        <div key={i} style={{position:"relative",borderRadius:10,overflow:"hidden",border:`2px solid ${i===0?C.accent:C.border}`,aspectRatio:"1/1",background:C.surface}}>
+          {/* Badge "Principal" sur le 1er */}
+          {i===0 && <span style={{position:"absolute",top:5,left:5,background:C.accent,color:"#000",fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:4,letterSpacing:"0.05em",zIndex:2}}>PRINCIPAL</span>}
+          {/* Aperçu */}
+          {m.type==="video"
+            ? <video src={m.url} style={{width:"100%",height:"100%",objectFit:"cover"}} autoPlay muted loop playsInline/>
+            : <img   src={m.url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>
+          }
+          {/* Badge type */}
+          <span style={{position:"absolute",bottom:4,left:4,background:"#000000bb",borderRadius:4,fontSize:9,padding:"2px 5px",color:"#fff"}}>
+            {m.type==="video"?"🎬 Vidéo":"📷 Photo"}
+          </span>
+          {/* Actions */}
+          <div style={{position:"absolute",top:4,right:4,display:"flex",flexDirection:"column",gap:3}}>
+            <button onClick={()=>remove(i)} title="Supprimer"
+              style={{background:"#ff475799",border:"none",borderRadius:5,color:"#fff",cursor:"pointer",width:22,height:22,fontSize:12,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+            {i>0&&<button onClick={()=>moveFirst(i)} title="Mettre en principal"
+              style={{background:"#00e5ff99",border:"none",borderRadius:5,color:"#000",cursor:"pointer",width:22,height:22,fontSize:11,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>★</button>}
+          </div>
+        </div>
+      ))}
     </div>}
 
-    {/* Zone de drop */}
+    {/* Zone de dépôt */}
     <div
       className={`drop-zone${dragging?" drag-over":""}`}
       onDragOver={e=>{e.preventDefault();setDragging(true);}}
       onDragLeave={()=>setDragging(false)}
-      onDrop={handleDrop}
+      onDrop={e=>{e.preventDefault();setDragging(false);handleFiles(e.dataTransfer.files);}}
       onClick={()=>fileRef.current?.click()}
     >
-      <input ref={fileRef} type="file" accept={accept} onChange={e=>handleFile(e.target.files[0])}/>
+      <input ref={fileRef} type="file" accept="image/*,video/*" multiple onChange={e=>handleFiles(e.target.files)}/>
       {uploading
-        ? <div style={{color:C.accent,fontSize:13}}>⏳ Upload en cours...</div>
+        ? <div style={{color:C.accent,fontSize:13,padding:"8px 0"}}>⏳ Upload en cours...</div>
         : <div style={{color:C.text3,fontSize:13}}>
-            <div style={{fontSize:22,marginBottom:6}}>{isVideo(url)?"🎬":"📷"}</div>
-            <div><span style={{color:C.accent,fontWeight:600}}>Glisse un fichier</span> ou clique pour choisir</div>
-            {hint&&<div style={{fontSize:11,marginTop:4}}>{hint}</div>}
+            <div style={{fontSize:26,marginBottom:6}}>📂</div>
+            <div><span style={{color:C.accent,fontWeight:600}}>Glisse tes fichiers ici</span> ou clique pour choisir</div>
+            <div style={{fontSize:11,marginTop:4,color:C.text3}}>Photos (JPG, PNG, WebP) + Vidéos (MP4) — plusieurs à la fois</div>
           </div>
       }
     </div>
 
     {/* Lien URL externe */}
     <div>
-      <button onClick={()=>setShowUrl(v=>!v)} style={{background:"none",border:"none",color:C.text3,fontSize:12,cursor:"pointer",padding:0,textDecoration:"underline"}}>
-        {showUrl?"▲ Masquer":"▼ Ou coller un lien URL (Drive, Instagram...)"}
+      <button onClick={()=>setShowUrl(v=>!v)}
+        style={{background:"none",border:"none",color:C.text3,fontSize:12,cursor:"pointer",padding:0,textDecoration:"underline"}}>
+        {showUrl?"▲ Masquer":"▼ Ajouter via lien URL (Google Drive, Instagram...)"}
       </button>
       {showUrl&&<div style={{display:"flex",gap:8,marginTop:8}}>
         <input value={urlInput} onChange={e=>setUrlInput(e.target.value)} placeholder="https://..." onKeyDown={e=>e.key==="Enter"&&applyUrl()}
           style={{flex:1,background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:13,padding:"8px 12px",outline:"none"}}
           onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
-        <Btn onClick={applyUrl} style={{padding:"8px 12px",fontSize:12}}>Appliquer</Btn>
+        <Btn onClick={applyUrl} style={{padding:"8px 12px",fontSize:12}}>+ Ajouter</Btn>
       </div>}
     </div>
   </div>;
@@ -383,7 +428,7 @@ function OrdersPage({orders,setOrders,loading,reload}){
 }
 
 /* ── CATALOG ── */
-const EMPTY={name:"",cat:"puff",emoji:"💨",price:"",unit:"/ unité",min_qty:"10",badge:"",stock:"",gouts:[],image_url:"",video_url:""};
+const EMPTY={name:"",cat:"puff",emoji:"💨",price:"",unit:"/ unité",min_qty:"10",badge:"",stock:"",gouts:[],medias:[]};
 
 function CatalogPage({products,setProducts,loading,reload}){
   const [filter,setFilter]=useState("tous");
@@ -397,16 +442,26 @@ function CatalogPage({products,setProducts,loading,reload}){
 
   const openNew=()=>{setForm(EMPTY);setModal("new");};
   const openEdit=p=>{
+    const existingMedias = [];
+    if(p.image_url) existingMedias.push({url:p.image_url, type:"image"});
+    if(p.video_url) existingMedias.push({url:p.video_url, type:"video"});
+    const gal = Array.isArray(p.gallery)?p.gallery:(p.gallery?JSON.parse(p.gallery||"[]"):[]);
+    gal.forEach(url=>{if(url&&!existingMedias.find(m=>m.url===url))existingMedias.push({url,type:isVideo(url)?"video":"image"});});
     setForm({name:p.name,cat:p.cat,emoji:p.emoji||"💨",price:String(p.price),unit:p.unit,min_qty:String(p.min_qty),badge:p.badge||"",stock:String(p.stock),
       gouts:Array.isArray(p.gouts)?p.gouts:(p.gouts?JSON.parse(p.gouts):[]),
-      image_url:p.image_url||"",video_url:p.video_url||""});
+      medias: existingMedias});
     setModal(p);
   };
 
   const save=async()=>{
     if(!form.name||!form.price)return;
     setSaving(true);
-    const body={name:form.name,cat:form.cat,emoji:form.emoji,price:parseFloat(form.price),unit:form.unit,min_qty:parseInt(form.min_qty)||1,stock:parseInt(form.stock)||0,badge:form.badge||null,gouts:form.gouts,image_url:form.image_url||null,video_url:form.video_url||null};
+    // Extraire image_url (1ère photo), video_url (1ère vidéo), gallery (reste)
+    const firstImg  = form.medias.find(m=>m.type==="image");
+    const firstVid  = form.medias.find(m=>m.type==="video");
+    const gallery   = form.medias.filter(m=>m!==firstImg&&m!==firstVid).map(m=>m.url);
+    const body={name:form.name,cat:form.cat,emoji:form.emoji,price:parseFloat(form.price),unit:form.unit,min_qty:parseInt(form.min_qty)||1,stock:parseInt(form.stock)||0,badge:form.badge||null,gouts:form.gouts,
+      image_url:firstImg?.url||null, video_url:firstVid?.url||null, gallery};
     try{
       if(modal==="new"){const [r]=await sbPost("products",body);setProducts(prev=>[...prev,r]);showToast("✅ Produit ajouté !");}
       else{await sbPatch("products",modal.id,body);setProducts(prev=>prev.map(p=>p.id===modal.id?{...p,...body}:p));showToast("✅ Produit modifié !");}
@@ -445,18 +500,24 @@ function CatalogPage({products,setProducts,loading,reload}){
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:14}}>
       {filtered.map(p=>{
         const gouts=Array.isArray(p.gouts)?p.gouts:(p.gouts?JSON.parse(p.gouts):[]);
-        const hasMedia=p.image_url||p.video_url;
+        const gal=Array.isArray(p.gallery)?p.gallery:(p.gallery?JSON.parse(p.gallery||"[]"):[]);
+        // 1er média = image_url ou video_url, sinon 1er de la galerie
+        const mainImg = p.image_url || (gal.find(u=>!isVideo(u))) || "";
+        const mainVid = p.video_url || (gal.find(u=>isVideo(u)))  || "";
+        const mediaCount = [p.image_url,p.video_url,...gal].filter(Boolean).length;
         return <Card key={p.id} style={{padding:0,overflow:"hidden"}}>
           {/* Media preview */}
           <div style={{height:140,background:C.surface,display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
-            {hasMedia
-              ? isVideo(p.video_url||"")
-                ? <video src={p.video_url} style={{width:"100%",height:"100%",objectFit:"cover"}} autoPlay muted loop playsInline/>
-                : <img src={p.image_url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>
-              : <span style={{fontSize:48}}>{p.emoji||"💨"}</span>
+            {mainVid
+              ? <video src={mainVid} style={{width:"100%",height:"100%",objectFit:"cover"}} autoPlay muted loop playsInline/>
+              : mainImg
+                ? <img src={mainImg} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>
+                : <span style={{fontSize:48}}>{p.emoji||"💨"}</span>
             }
             {p.badge&&<span style={{position:"absolute",top:8,left:8,fontSize:10,padding:"2px 8px",borderRadius:4,background:p.badge==="new"?"#00e676":p.badge==="promo"?"#ff3d3d":p.badge==="top"?"#00e5ff":"#ff6d00",color:"#000",fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase"}}>{p.badge}</span>}
-            {p.video_url&&<span style={{position:"absolute",top:8,right:8,fontSize:10,padding:"2px 8px",borderRadius:4,background:"#000000aa",color:"#fff"}}>🎬 Vidéo</span>}
+            {mediaCount>0&&<span style={{position:"absolute",bottom:8,right:8,fontSize:10,padding:"2px 7px",borderRadius:4,background:"#000000aa",color:"#fff"}}>
+              {mediaCount} média{mediaCount>1?"s":""}
+            </span>}
           </div>
 
           <div style={{padding:14}}>
@@ -511,27 +572,9 @@ function CatalogPage({products,setProducts,loading,reload}){
           </div>
           <Inp label="Unité (affichage)" value={form.unit} onChange={v=>setF({unit:v})} placeholder="/ unité"/>
 
-          {/* Séparateur */}
+          {/* Médias */}
           <div style={{borderTop:`1px solid ${C.border}`,paddingTop:18}}>
-            <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em",marginBottom:16,color:C.accent}}>📸 Médias du produit</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
-              <MediaUploader
-                label="Photo principale"
-                url={form.image_url}
-                onUrl={v=>setF({image_url:v})}
-                accept="image/*"
-                folder="photos"
-                hint="JPG, PNG, WebP recommandé"
-              />
-              <MediaUploader
-                label="Vidéo courte"
-                url={form.video_url}
-                onUrl={v=>setF({video_url:v})}
-                accept="video/*"
-                folder="videos"
-                hint="MP4, max 30s recommandé"
-              />
-            </div>
+            <GalerieEditor medias={form.medias} onChange={medias=>setF({medias})}/>
           </div>
 
           {/* Goûts */}
