@@ -273,7 +273,7 @@ function LoginPage({onLogin}){
       <Card style={{padding:32}}>
         <div style={{marginBottom:24}}><div style={{fontFamily:"'Bebas Neue'",fontSize:24,color:C.text1,letterSpacing:"0.05em"}}>Connexion</div><div style={{fontSize:13,color:C.text2,marginTop:4}}>Accès réservé aux administrateurs</div></div>
         <form onSubmit={handle} style={{display:"flex",flexDirection:"column",gap:16}}>
-          <Inp label="Email" type="email" value={email} onChange={setEmail} placeholder="admin@zkpro.fr" required/>
+          <Inp label="Email" type="email" value={email} onChange={setEmail} placeholder="Email" required/>
           <Inp label="Mot de passe" type="password" value={pass} onChange={setPass} placeholder="••••••••" required/>
           {err&&<div style={{background:"#ff475715",border:`1px solid ${C.red}44`,borderRadius:8,padding:"10px 14px",fontSize:13,color:C.red}}>{err}</div>}
           <Btn style={{width:"100%",justifyContent:"center",padding:"12px 20px",fontSize:14,marginTop:8}} disabled={loading}>{loading?"Connexion...":"Se connecter →"}</Btn>
