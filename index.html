@@ -273,11 +273,12 @@ function LoginPage({onLogin}){
       <Card style={{padding:32}}>
         <div style={{marginBottom:24}}><div style={{fontFamily:"'Bebas Neue'",fontSize:24,color:C.text1,letterSpacing:"0.05em"}}>Connexion</div><div style={{fontSize:13,color:C.text2,marginTop:4}}>Accès réservé aux administrateurs</div></div>
         <form onSubmit={handle} style={{display:"flex",flexDirection:"column",gap:16}}>
-          <Inp label="Email" type="email" value={email} onChange={setEmail} placeholder="Email" required/>
+          <Inp label="Email" type="email" value={email} onChange={setEmail} placeholder="admin@zkpro.fr" required/>
           <Inp label="Mot de passe" type="password" value={pass} onChange={setPass} placeholder="••••••••" required/>
           {err&&<div style={{background:"#ff475715",border:`1px solid ${C.red}44`,borderRadius:8,padding:"10px 14px",fontSize:13,color:C.red}}>{err}</div>}
           <Btn style={{width:"100%",justifyContent:"center",padding:"12px 20px",fontSize:14,marginTop:8}} disabled={loading}>{loading?"Connexion...":"Se connecter →"}</Btn>
         </form>
+        <div style={{marginTop:20,padding:"12px 14px",background:C.surface,borderRadius:8,fontSize:11,color:C.text3}}><span style={{color:C.text2,fontWeight:600}}>Démo :</span> admin@zkpro.fr / zkpro2025</div>
       </Card>
     </div>
   </div>;
@@ -288,7 +289,7 @@ function Sidebar({page,setPage,onLogout,newCount}){
   const nav=[{id:"dashboard",icon:"◈",label:"Dashboard"},{id:"orders",icon:"≡",label:"Commandes"},{id:"catalog",icon:"⊞",label:"Catalogue"},{id:"settings",icon:"⊙",label:"Paramètres"}];
   return <div style={{width:220,minHeight:"100vh",background:C.surface,borderRight:`1px solid ${C.border}`,display:"flex",flexDirection:"column",position:"fixed",left:0,top:0,bottom:0,zIndex:100}}>
     <div style={{padding:"24px 20px",borderBottom:`1px solid ${C.border}`}}><div style={{fontFamily:"'Bebas Neue'",fontSize:28,color:C.accent,letterSpacing:"0.1em"}}>ZK PRO</div><div style={{fontSize:10,color:C.text3,letterSpacing:"0.15em",textTransform:"uppercase",marginTop:2}}>Admin Panel</div></div>
-    <div style={{padding:"12px 20px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:8}}><span className="live-dot"/><span style={{fontSize:11,color:C.text3}}>BOT actif</span></div>
+    <div style={{padding:"12px 20px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:8}}><span className="live-dot"/><span style={{fontSize:11,color:C.text3}}>Supabase connecté</span></div>
     <nav style={{flex:1,padding:"12px"}}>
       {nav.map(item=><button key={item.id} onClick={()=>setPage(item.id)} style={{display:"flex",alignItems:"center",gap:12,width:"100%",padding:"11px 12px",borderRadius:8,marginBottom:4,background:page===item.id?C.accentDim:"transparent",border:page===item.id?`1px solid ${C.accentMid}`:"1px solid transparent",color:page===item.id?C.accent:C.text2,fontSize:14,fontWeight:500,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}} onMouseEnter={e=>page!==item.id&&(e.currentTarget.style.background="#ffffff08")} onMouseLeave={e=>page!==item.id&&(e.currentTarget.style.background="transparent")}>
         <span style={{fontSize:18,lineHeight:1,fontFamily:"monospace"}}>{item.icon}</span><span>{item.label}</span>
@@ -400,7 +401,27 @@ function OrdersPage({orders,setOrders,loading,reload}){
             <button onClick={()=>setSelected(null)} style={{background:"none",border:"none",color:C.text3,cursor:"pointer",fontSize:18}}>×</button>
           </div>
           <div style={{display:"flex",flexDirection:"column",gap:16}}>
-            <div><div style={{fontSize:11,color:C.text3,marginBottom:4,textTransform:"uppercase",letterSpacing:"0.08em"}}>Client</div><div style={{fontSize:15,fontWeight:600}}>{selected.telegram_user}</div><div style={{fontSize:11,color:C.text3,marginTop:2}}>{new Date(selected.created_at).toLocaleString("fr-FR")}</div></div>
+            <div>
+              <div style={{fontSize:11,color:C.text3,marginBottom:6,textTransform:"uppercase",letterSpacing:"0.08em"}}>Client</div>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <div style={{width:36,height:36,borderRadius:10,background:C.accentDim,border:`1px solid ${C.accentMid}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>
+                  {selected.telegram_user?.startsWith("@")?"👤":"🧑"}
+                </div>
+                <div>
+                  {selected.telegram_user?.startsWith("@")
+                    ? <a href={`https://t.me/${selected.telegram_user.slice(1)}`} target="_blank"
+                        style={{fontSize:15,fontWeight:700,color:C.accent,textDecoration:"none",display:"flex",alignItems:"center",gap:5}}
+                        onMouseEnter={e=>e.currentTarget.style.textDecoration="underline"}
+                        onMouseLeave={e=>e.currentTarget.style.textDecoration="none"}>
+                        {selected.telegram_user}
+                        <span style={{fontSize:11,background:C.accentDim,border:`1px solid ${C.accentMid}`,borderRadius:4,padding:"1px 6px",color:C.accent}}>Ouvrir →</span>
+                      </a>
+                    : <div style={{fontSize:15,fontWeight:700}}>{selected.telegram_user}</div>
+                  }
+                  <div style={{fontSize:11,color:C.text3,marginTop:2}}>{new Date(selected.created_at).toLocaleString("fr-FR")}</div>
+                </div>
+              </div>
+            </div>
             <div style={{borderTop:`1px solid ${C.border}`,paddingTop:16}}>
               <div style={{fontSize:11,color:C.text3,marginBottom:10,textTransform:"uppercase",letterSpacing:"0.08em"}}>Articles</div>
               {parseItems(selected.items).map((item,i)=><div key={i} style={{marginBottom:10,padding:"8px 10px",background:C.surface,borderRadius:8}}>
