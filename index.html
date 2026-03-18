@@ -406,17 +406,17 @@ function OrdersPage({orders,setOrders,loading,reload}){
               <div style={{display:"flex",alignItems:"center",gap:10}}>
                 <div style={{width:36,height:36,borderRadius:10,background:C.accentDim,border:`1px solid ${C.accentMid}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>👤</div>
                 <div>
-                  <div style={{fontSize:15,fontWeight:700,marginBottom:2}}>{selected.telegram_user}</div>
+                  <div style={{fontSize:15,fontWeight:700,marginBottom:4}}>{selected.telegram_user}</div>
                   <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:4}}>
+                    {selected.telegram_id &&
+                      <a href={`https://t.me/zkprobo_bot?start=user_${selected.telegram_id}`} target="_blank"
+                        style={{fontSize:11,color:C.accent,textDecoration:"none",background:C.accentDim,border:`1px solid ${C.accentMid}`,borderRadius:4,padding:"2px 8px"}}>
+                        💬 Contacter via bot
+                      </a>}
                     {selected.telegram_user?.startsWith("@") &&
                       <a href={`https://t.me/${selected.telegram_user.slice(1)}`} target="_blank"
-                        style={{fontSize:11,color:C.accent,textDecoration:"none",background:C.accentDim,border:`1px solid ${C.accentMid}`,borderRadius:4,padding:"2px 8px"}}>
+                        style={{fontSize:11,color:C.text2,textDecoration:"none",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,padding:"2px 8px"}}>
                         🔗 Profil @username
-                      </a>}
-                    {selected.telegram_id &&
-                      <a href={`tg://user?id=${selected.telegram_id}`}
-                        style={{fontSize:11,color:C.green,textDecoration:"none",background:"#00e67615",border:"1px solid #00e67633",borderRadius:4,padding:"2px 8px"}}>
-                        💬 Ouvrir dans Telegram
                       </a>}
                   </div>
                   <div style={{fontSize:11,color:C.text3}}>{new Date(selected.created_at).toLocaleString("fr-FR")}</div>
