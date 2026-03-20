@@ -298,6 +298,7 @@ function LoginPage({onLogin}){
           {err&&<div style={{background:"#ff475715",border:`1px solid ${C.red}44`,borderRadius:8,padding:"10px 14px",fontSize:13,color:C.red}}>{err}</div>}
           <Btn style={{width:"100%",justifyContent:"center",padding:"12px 20px",fontSize:14,marginTop:8}} disabled={loading}>{loading?"Connexion...":"Se connecter →"}</Btn>
         </form>
+      </Card>
     </div>
   </div>;
 }
