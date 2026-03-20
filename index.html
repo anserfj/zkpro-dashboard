@@ -29,21 +29,55 @@
     /* ── RESPONSIVE ── */
     .sidebar-desktop{display:flex}
     .sidebar-mobile{display:none}
-    .main-content{margin-left:220px;max-width:calc(100vw - 220px)}
+    .main-content{margin-left:220px;max-width:calc(100vw - 220px);padding:32px 28px}
     .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
     .orders-grid{display:grid;grid-template-columns:1.6fr 1fr;gap:16px}
 
     @media(max-width:900px){
-      .stats-grid{grid-template-columns:repeat(2,1fr)!important}
+      .stats-grid{grid-template-columns:repeat(2,1fr)!important;gap:10px!important}
       .orders-grid{grid-template-columns:1fr!important}
     }
+
     @media(max-width:640px){
+      /* Nav */
       .sidebar-desktop{display:none!important}
-      .sidebar-mobile{display:flex!important;position:fixed;bottom:0;left:0;right:0;height:60px;background:#0f1318;border-top:1px solid #1e2530;z-index:200;align-items:stretch}
-      .main-content{margin-left:0!important;max-width:100vw!important;padding:16px 14px 76px!important}
-      .stats-grid{grid-template-columns:repeat(2,1fr)!important}
+      .sidebar-mobile{
+        display:flex!important;position:fixed;bottom:0;left:0;right:0;
+        height:64px;background:#0c0f14;border-top:1px solid #1e2530;
+        z-index:200;align-items:stretch;
+        padding-bottom:env(safe-area-inset-bottom);
+      }
+      /* Layout */
+      .main-content{
+        margin-left:0!important;max-width:100vw!important;
+        padding:14px 12px calc(72px + env(safe-area-inset-bottom)) 12px!important;
+      }
+      /* Grilles */
+      .stats-grid{grid-template-columns:repeat(2,1fr)!important;gap:8px!important}
       .orders-grid{grid-template-columns:1fr!important}
+      /* Colonnes tableau cachées */
       .hide-mobile{display:none!important}
+      /* Titres */
+      .page-title{font-size:26px!important}
+      /* Cards */
+      .card-pad{padding:14px!important}
+      /* Catalogue grid */
+      .catalog-grid{grid-template-columns:repeat(2,1fr)!important;gap:10px!important}
+      /* Formulaire produit */
+      .form-2col{grid-template-columns:1fr!important}
+      .form-3col{grid-template-columns:1fr 1fr!important}
+      /* Tableau commandes : scroll horizontal */
+      .orders-table-wrap{overflow-x:auto!important;-webkit-overflow-scrolling:touch}
+      /* Inbox messages */
+      .inbox-wrap{flex-direction:column!important}
+      .inbox-users{width:100%!important;max-height:200px!important;border-right:none!important;border-bottom:1px solid #1e2530!important}
+      /* Modal produit */
+      .modal-inner{width:100%!important;max-width:100%!important;border-radius:20px 20px 0 0!important;margin-top:auto!important;max-height:92vh!important}
+      /* Filtres commandes */
+      .filter-wrap{flex-wrap:wrap!important;gap:6px!important}
+      .filter-wrap button{padding:5px 10px!important;font-size:11px!important}
+      /* Boutons header */
+      .header-actions .btn-ghost-txt{display:none}
     }
   </style>
 </head>
@@ -103,10 +137,10 @@ function Sel({label,value,onChange,options,style={}}){
   </div>;
 }
 function StatCard({icon,label,value,sub,color=C.accent,trend}){
-  return <Card style={{display:"flex",flexDirection:"column",gap:12,position:"relative",overflow:"hidden"}}>
-    <div style={{position:"absolute",top:0,right:0,width:80,height:80,background:`radial-gradient(circle at 100% 0%,${color}15 0%,transparent 70%)`}}/>
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}><span style={{fontSize:24}}>{icon}</span>{trend!==undefined&&<span style={{fontSize:11,fontWeight:600,color:trend>=0?C.green:C.red}}>{trend>=0?"▲":"▼"} {Math.abs(trend)}%</span>}</div>
-    <div><div style={{fontFamily:"'Bebas Neue'",fontSize:32,color,letterSpacing:"0.03em",lineHeight:1}}>{value}</div><div style={{fontSize:12,color:C.text2,marginTop:4,fontWeight:500}}>{label}</div>{sub&&<div style={{fontSize:11,color:C.text3,marginTop:2}}>{sub}</div>}</div>
+  return <Card style={{display:"flex",flexDirection:"column",gap:8,position:"relative",overflow:"hidden",padding:16}}>
+    <div style={{position:"absolute",top:0,right:0,width:60,height:60,background:`radial-gradient(circle at 100% 0%,${color}15 0%,transparent 70%)`}}/>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}><span style={{fontSize:20}}>{icon}</span>{trend!==undefined&&<span style={{fontSize:10,fontWeight:600,color:trend>=0?C.green:C.red}}>{trend>=0?"▲":"▼"}{Math.abs(trend)}%</span>}</div>
+    <div><div style={{fontFamily:"'Bebas Neue'",fontSize:26,color,letterSpacing:"0.03em",lineHeight:1}}>{value}</div><div style={{fontSize:11,color:C.text2,marginTop:3,fontWeight:500}}>{label}</div>{sub&&<div style={{fontSize:10,color:C.text3,marginTop:1}}>{sub}</div>}</div>
   </Card>;
 }
 
@@ -353,12 +387,12 @@ function DashboardPage({orders,setPage,loading}){
   const totalCA=orders.filter(o=>o.status!=="annulé").reduce((s,o)=>s+parseFloat(o.total)+parseFloat(o.livraison),0);
   const newOrders=orders.filter(o=>o.status==="nouveau").length;
   const shipped=orders.filter(o=>o.status==="expédié").length;
-  return <div className="fade-in" style={{display:"flex",flexDirection:"column",gap:24}}>
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-      <div><div style={{fontFamily:"'Bebas Neue'",fontSize:36,letterSpacing:"0.05em"}}>Dashboard</div>
-      <div style={{fontSize:13,color:C.text3,marginTop:2}}>Synchronisé · <a href="https://anserfj.github.io/telegram-shop/" target="_blank" style={{color:C.accent,textDecoration:"none"}}>Voir la boutique →</a></div></div>
-      <div style={{display:"flex",gap:10}}>
-        <Btn variant="ghost" onClick={()=>window.open("https://anserfj.github.io/telegram-shop/","_blank")}>🛒 Boutique</Btn>
+  return <div className="fade-in" style={{display:"flex",flexDirection:"column",gap:20}}>
+    <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+      <div><div className="page-title" style={{fontFamily:"'Bebas Neue'",fontSize:36,letterSpacing:"0.05em"}}>Dashboard</div>
+      <div style={{fontSize:12,color:C.text3,marginTop:2}}>Synchronisé · <a href="https://anserfj.github.io/telegram-shop/" target="_blank" style={{color:C.accent,textDecoration:"none"}}>Voir la boutique →</a></div></div>
+      <div style={{display:"flex",gap:8,flexShrink:0}}>
+        <Btn variant="ghost" onClick={()=>window.open("https://anserfj.github.io/telegram-shop/","_blank")}>🛒</Btn>
         <Btn onClick={()=>setPage("orders")}>Commandes →</Btn>
       </div>
     </div>
@@ -414,19 +448,19 @@ function OrdersPage({orders,setOrders,loading,reload,selectedOrder,setSelectedOr
   const updateStatus=async(id,status)=>{setUpdating(true);try{await sbPatch("orders",id,{status});setOrders(prev=>prev.map(o=>o.id===id?{...o,status}:o));setSelected(prev=>prev?.id===id?{...prev,status}:prev);}catch(e){alert(e.message);}setUpdating(false);};
   const parseItems=items=>{try{return Array.isArray(items)?items:JSON.parse(items||"[]");}catch{return[];}};
   return <div className="fade-in" style={{display:"flex",flexDirection:"column",gap:20}}>
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-      <div style={{fontFamily:"'Bebas Neue'",fontSize:36,letterSpacing:"0.05em"}}>Commandes</div>
-      <Btn variant="ghost" onClick={reload}>🔄 Actualiser</Btn>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+      <div className="page-title" style={{fontFamily:"'Bebas Neue'",fontSize:36,letterSpacing:"0.05em"}}>Commandes</div>
+      <Btn variant="ghost" onClick={reload}>🔄</Btn>
     </div>
-    <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
-      <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher..." style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:13,padding:"9px 14px",outline:"none",width:260}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
-      <div style={{display:"flex",gap:8,marginLeft:"auto"}}>
+    <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+      <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher..." style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:13,padding:"9px 14px",outline:"none",flex:1,minWidth:140}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+      <div style={{display:"flex",gap:8,marginLeft:"auto"}} className="filter-wrap">
         {["tous","nouveau","traité","expédié","annulé"].map(s=><button key={s} onClick={()=>setFilter(s)} style={{padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:600,cursor:"pointer",textTransform:"capitalize",background:filter===s?C.accent:"transparent",color:filter===s?C.bg:C.text2,border:`1px solid ${filter===s?C.accent:C.border}`,fontFamily:"'DM Sans',sans-serif"}}>{s}</button>)}
       </div>
     </div>
     {loading?<div style={{padding:60,display:"flex",justifyContent:"center"}}><div className="spinner"/></div>:
     <div style={{display:"flex",gap:16,flexWrap:"wrap"}}>
-      <div style={{flex:1,minWidth:0,minWidth:"280px"}}>
+      <div style={{flex:1,minWidth:0,minWidth:"280px"}} className="orders-table-wrap">
         <Card style={{padding:0,overflow:"hidden"}}>
           <table style={{width:"100%",borderCollapse:"collapse"}}>
             <thead><tr style={{borderBottom:`1px solid ${C.border}`}}>
@@ -576,10 +610,10 @@ function CatalogPage({products,setProducts,loading,reload}){
     {toast&&<div style={{position:"fixed",bottom:24,right:24,background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 20px",fontSize:14,zIndex:999,boxShadow:"0 8px 32px #00000080"}}>{toast}</div>}
 
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-      <div><div style={{fontFamily:"'Bebas Neue'",fontSize:36,letterSpacing:"0.05em"}}>Catalogue</div>
+      <div><div className="page-title" style={{fontFamily:"'Bebas Neue'",fontSize:36,letterSpacing:"0.05em"}}>Catalogue</div>
       <div style={{fontSize:12,color:C.text3,marginTop:2}}>Photos et vidéos synchronisées en temps réel</div></div>
       <div style={{display:"flex",gap:10}}>
-        <Btn variant="ghost" onClick={reload}>🔄 Actualiser</Btn>
+        <Btn variant="ghost" onClick={reload}>🔄</Btn>
         <Btn onClick={openNew}>+ Nouveau produit</Btn>
       </div>
     </div>
@@ -590,7 +624,7 @@ function CatalogPage({products,setProducts,loading,reload}){
     </div>
 
     {loading?<div style={{padding:60,display:"flex",justifyContent:"center"}}><div className="spinner"/></div>:
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:14}}>
+    <div className="catalog-grid" style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))",gap:14}}>
       {filtered.map(p=>{
         const gouts=Array.isArray(p.gouts)?p.gouts:(p.gouts?JSON.parse(p.gouts):[]);
         const gal=Array.isArray(p.gallery)?p.gallery:(p.gallery?JSON.parse(p.gallery||"[]"):[]);
@@ -641,8 +675,8 @@ function CatalogPage({products,setProducts,loading,reload}){
     </div>}
 
     {/* MODAL PRODUIT */}
-    {modal&&<div style={{position:"fixed",inset:0,background:"#000000cc",display:"flex",alignItems:"center",justifyContent:"center",zIndex:500,padding:16}} onClick={()=>setModal(null)}>
-      <div className="scale-in" style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:28,width:560,maxWidth:"100%",maxHeight:"92vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
+    {modal&&<div style={{position:"fixed",inset:0,background:"#000000cc",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:500,padding:0}} onClick={()=>setModal(null)}>
+      <div className="scale-in modal-inner" style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:28,width:560,maxWidth:"100%",maxHeight:"92vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
         <div style={{fontFamily:"'Bebas Neue'",fontSize:24,letterSpacing:"0.05em",marginBottom:24}}>
           {modal==="new"?"Nouveau produit":"Modifier : "+form.name}
         </div>
@@ -654,11 +688,11 @@ function CatalogPage({products,setProducts,loading,reload}){
             <Inp label="Emoji" value={form.emoji} onChange={v=>setF({emoji:v})}/>
             <Inp label="Nom du modèle" value={form.name} onChange={v=>setF({name:v})} placeholder="Ex: Elf Bar 600" required/>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <div className="form-2col" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
             <Sel label="Catégorie" value={form.cat} onChange={v=>setF({cat:v})} options={[{value:"puff",label:"Puff"},{value:"recharge",label:"Recharge"},{value:"accessoire",label:"Accessoire"}]}/>
             <Sel label="Badge" value={form.badge} onChange={v=>setF({badge:v})} options={[{value:"",label:"Aucun"},{value:"new",label:"🆕 Nouveau"},{value:"promo",label:"🔥 Promo"},{value:"top",label:"⭐ Top"},{value:"stock",label:"⚠️ Stock faible"}]}/>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
+          <div className="form-3col" style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
             <Inp label="Prix (€)" type="number" value={form.price} onChange={v=>setF({price:v})} required min="0"/>
             <Inp label="Qté minimum" type="number" value={form.min_qty} onChange={v=>setF({min_qty:v})} min="1"/>
             <Inp label="Stock" type="number" value={form.stock} onChange={v=>setF({stock:v})} min="0"/>
@@ -921,7 +955,7 @@ function MessagesPage({onRead, onGoToOrder}){
 
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexShrink:0}}>
       <div>
-        <div style={{fontFamily:"'Bebas Neue'",fontSize:36,letterSpacing:"0.05em"}}>Messages</div>
+        <div className="page-title" style={{fontFamily:"'Bebas Neue'",fontSize:36,letterSpacing:"0.05em"}}>Messages</div>
         <div style={{fontSize:12,color:C.text3,marginTop:2}}>{users.length} utilisateurs · {messages.filter(m=>m.direction==="in").length} reçus</div>
       </div>
       <div style={{display:"flex",gap:8}}>
@@ -976,9 +1010,9 @@ function MessagesPage({onRead, onGoToOrder}){
         </div>
       </div>
     ):(
-      <div style={{display:"flex",flex:1,minHeight:0,borderRadius:12,border:`1px solid ${C.border}`,overflow:"hidden"}}>
+      <div className="inbox-wrap" style={{display:"flex",flex:1,minHeight:0,borderRadius:12,border:`1px solid ${C.border}`,overflow:"hidden"}}>
         {/* Liste */}
-        <div style={{width:280,flexShrink:0,background:C.surface,borderRight:`1px solid ${C.border}`,overflowY:"auto"}}>
+        <div className="inbox-users" style={{width:280,flexShrink:0,background:C.surface,borderRight:`1px solid ${C.border}`,overflowY:"auto"}}>
           {users.length===0&&<div style={{padding:24,textAlign:"center",color:C.text3,fontSize:13}}>Aucun utilisateur</div>}
           {sortedUsers.map(u=>{
             const last=lastMsg(u),isSelected=selected?.id===u.id,unread=unreadForUser(u.id);
@@ -1096,7 +1130,7 @@ function App(){
       {page==="catalog"&&<CatalogPage products={products} setProducts={setProducts} loading={loadP} reload={fetchProducts}/>}
       {page==="messages"&&<MessagesPage onRead={()=>{setUnreadMsgCount(0);pollUnread();}} onGoToOrder={orderId=>{setSelectedOrder(orderId);setPage("orders");fetchOrders();}}/>}
       {page==="settings"&&<div className="fade-in" style={{maxWidth:680}}>
-        <div style={{fontFamily:"'Bebas Neue'",fontSize:36,letterSpacing:"0.05em",marginBottom:24}}>Paramètres</div>
+        <div className="page-title" style={{fontFamily:"'Bebas Neue'",fontSize:36,letterSpacing:"0.05em",marginBottom:24}}>Paramètres</div>
         <Card>
           <div style={{fontFamily:"'Bebas Neue'",fontSize:20,letterSpacing:"0.05em",marginBottom:16}}>Liens rapides</div>
           {[{label:"🛒 Boutique Telegram",url:"https://anserfj.github.io/telegram-shop/",sub:"anserfj.github.io/telegram-shop"},{label:"🗄️ Supabase Console",url:"https://supabase.com/dashboard",sub:"hyigrnuoojusixzahjvq.supabase.co"}].map(l=>
