@@ -695,7 +695,6 @@ function MessagesPage({onRead}){
     try{
       const[u,m]=await Promise.all([sbGet("bot_users","?order=last_seen.desc"),sbGet("bot_messages","?order=created_at.desc&limit=500")]);
       setUsers(u); setMessages(m);
-      if(!silent)markAllRead(m);
     }catch(e){console.error(e);}
     if(!silent)setLoading(false);
   };
@@ -708,8 +707,37 @@ function MessagesPage({onRead}){
     if(messagesEndRef.current) messagesEndRef.current.scrollIntoView({behavior:"smooth"});
   },[messages,selected]);
 
-  // Marquer comme lus quand on change de conversation
-  useEffect(()=>{if(selected)markRead(selected.id);},[selected]);
+  // Ref sur le conteneur messages pour l'IntersectionObserver
+  const messagesContainerRef = useRef(null);
+
+  // Marquer comme lus SEULEMENT quand les messages sont visibles à l'écran
+  useEffect(()=>{
+    if(!selected || !messagesContainerRef.current) return;
+    const container = messagesContainerRef.current;
+
+    const observer = new IntersectionObserver((entries)=>{
+      const visibleIds = [];
+      entries.forEach(entry=>{
+        if(entry.isIntersecting){
+          const id = parseInt(entry.target.dataset.msgid);
+          const dir = entry.target.dataset.direction;
+          if(id && dir === "in") visibleIds.push(id);
+        }
+      });
+      if(visibleIds.length > 0){
+        const existing = JSON.parse(localStorage.getItem("zkpro_read_ids")||"[]");
+        const merged = [...new Set([...existing,...visibleIds])].slice(-1000);
+        localStorage.setItem("zkpro_read_ids", JSON.stringify(merged));
+        if(onRead) onRead();
+      }
+    }, { root: container, threshold: 0.5 });
+
+    // Observer tous les messages entrants non lus
+    const unreadMsgs = container.querySelectorAll("[data-direction='in']");
+    unreadMsgs.forEach(el => observer.observe(el));
+
+    return () => observer.disconnect();
+  },[selected, messages]);
 
   const deleteMsg=async msg=>{
     if(msg.direction==="out"&&msg.tg_message_id){
@@ -873,10 +901,10 @@ function MessagesPage({onRead}){
             </div>
 
             {/* Messages - scroll automatique */}
-            <div style={{flex:1,overflowY:"auto",padding:"16px 18px",display:"flex",flexDirection:"column",gap:8,minHeight:0}}>
+            <div ref={messagesContainerRef} style={{flex:1,overflowY:"auto",padding:"16px 18px",display:"flex",flexDirection:"column",gap:8,minHeight:0}}>
               {userMessages(selected.id).length===0&&<div style={{textAlign:"center",color:C.text3,fontSize:13,padding:24}}>Aucun message</div>}
               {userMessages(selected.id).map(m=>(
-                <div key={m.id} style={{display:"flex",justifyContent:m.direction==="out"?"flex-end":"flex-start",gap:6,alignItems:"flex-end"}}>
+                <div key={m.id} data-msgid={m.id} data-direction={m.direction} style={{display:"flex",justifyContent:m.direction==="out"?"flex-end":"flex-start",gap:6,alignItems:"flex-end"}}>
                   {m.direction==="in"&&<div style={{width:28,height:28,borderRadius:"50%",background:C.accentDim,border:`1px solid ${C.accentMid}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,flexShrink:0}}>👤</div>}
                   <div style={{maxWidth:"72%"}}>
                     <div style={{padding:"9px 13px",borderRadius:m.direction==="out"?"16px 16px 4px 16px":"16px 16px 16px 4px",background:m.direction==="out"?C.accent:C.surface,color:m.direction==="out"?C.bg:C.text1,fontSize:13,lineHeight:1.5,wordBreak:"break-word"}}>
