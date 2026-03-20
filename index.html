@@ -780,7 +780,7 @@ function MessagesPage({onRead}){
         let tgMsgId=null;
         if(broadcastFile){tgMsgId=await sendTgFile(u.id,broadcastFile);if(broadcast.trim())await sendTgMessage(u.id,broadcast.trim());}
         else{tgMsgId=await sendTgMessage(u.id,broadcast.trim());}
-        await fetch(`${SB_URL}/rest/v1/bot_messages`,{method:"POST",headers:{...SBH,"Prefer":"return=minimal"},body:JSON.stringify({telegram_id:u.id,direction:"out",text:displayText,tg_message_id:tgMsgId,created_at:sentAt})});
+        await fetch(`${SB_URL}/rest/v1/bot_messages`,{method:"POST",headers:{...SBH,"Prefer":"return=minimal"},body:JSON.stringify({telegram_id:u.id,direction:"out",text:displayText,tg_message_id:tgMsgId,created_at:sentAt,is_broadcast:true})});
         ok++;
       }catch(e){fail++;}
       await new Promise(r=>setTimeout(r,50));
@@ -791,7 +791,7 @@ function MessagesPage({onRead}){
   };
 
   const broadcastGroups=()=>{
-    const out=messages.filter(m=>m.direction==="out");
+    const out=messages.filter(m=>m.direction==="out"&&m.is_broadcast===true);
     const groups={};
     out.forEach(m=>{const key=m.text+"|"+m.created_at.slice(0,16);if(!groups[key])groups[key]={text:m.text,created_at:m.created_at,msgs:[]};groups[key].msgs.push(m);});
     return Object.values(groups).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
