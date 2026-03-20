@@ -1057,7 +1057,7 @@ function MessagesPage({onRead, onGoToOrder}){
 
 /* ── APP ── */
 function App(){
-  const [logged,setLogged]=useState(false);
+  const [logged,setLogged]=useState(()=>localStorage.getItem("zkpro_logged")==="1");
   const [page,setPage]=useState("dashboard");
   const [orders,setOrders]=useState([]);
   const [selectedOrder,setSelectedOrder]=useState(null);
@@ -1065,6 +1065,9 @@ function App(){
   const [loadO,setLoadO]=useState(false);
   const [loadP,setLoadP]=useState(false);
   const [unreadMsgCount,setUnreadMsgCount]=useState(0);
+
+  const login  = () => { localStorage.setItem("zkpro_logged","1"); setLogged(true); };
+  const logout = () => { localStorage.removeItem("zkpro_logged"); setLogged(false); };
 
   const fetchOrders=async()=>{setLoadO(true);try{setOrders(await sbGet("orders","?order=created_at.desc"));}catch(e){console.error(e);}setLoadO(false);};
   const fetchProducts=async()=>{setLoadP(true);try{setProducts(await sbGet("products","?order=id.asc"));}catch(e){console.error(e);}setLoadP(false);};
@@ -1084,9 +1087,9 @@ function App(){
   useEffect(()=>{if(!logged)return;const t=setInterval(pollUnread,5000);return()=>clearInterval(t);},[logged]);
 
   const newCount=orders.filter(o=>o.status==="nouveau").length;
-  if(!logged)return <LoginPage onLogin={()=>setLogged(true)}/>;
+  if(!logged)return <LoginPage onLogin={login}/>;
   return <div style={{display:"flex",minHeight:"100vh"}}>
-    <Sidebar page={page} setPage={setPage} onLogout={()=>setLogged(false)} newCount={newCount} unreadMsg={unreadMsgCount}/>
+    <Sidebar page={page} setPage={setPage} onLogout={logout} newCount={newCount} unreadMsg={unreadMsgCount}/>
     <main className="main-content" style={{flex:1,padding:"32px 28px"}}>
       {page==="dashboard"&&<DashboardPage orders={orders} setPage={setPage} loading={loadO}/>}
       {page==="orders"&&<OrdersPage orders={orders} setOrders={setOrders} loading={loadO} reload={fetchOrders} selectedOrder={selectedOrder} setSelectedOrder={setSelectedOrder}/>}
@@ -1104,7 +1107,7 @@ function App(){
         </Card>
         <Card style={{marginTop:16}}>
           <div style={{fontFamily:"'Bebas Neue'",fontSize:20,letterSpacing:"0.05em",marginBottom:16}}>Compte</div>
-          <button onClick={()=>setLogged(false)} style={{padding:"10px 20px",borderRadius:8,background:"transparent",border:`1px solid ${C.red}44`,color:C.red,fontSize:13,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Déconnexion</button>
+          <button onClick={logout} style={{padding:"10px 20px",borderRadius:8,background:"transparent",border:`1px solid ${C.red}44`,color:C.red,fontSize:13,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Déconnexion</button>
         </Card>
       </div>}
     </main>
