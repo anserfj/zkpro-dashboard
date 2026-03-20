@@ -249,6 +249,9 @@ function Sidebar({page,setPage,onLogout,newCount,unreadMsg}){
         <div style={{fontFamily:"'Bebas Neue'",fontSize:26,color:C.accent,letterSpacing:"0.1em"}}>ZK PRO</div>
         <div style={{fontSize:10,color:C.text3,letterSpacing:"0.15em",textTransform:"uppercase",marginTop:1}}>Admin Panel</div>
       </div>
+      <div style={{padding:"10px 12px",borderBottom:`1px solid ${C.border}`}}>
+        <input placeholder="🔍 Recherche rapide..." onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){setPage("orders")}}} style={{width:"100%",background:C.bg,border:`1px solid ${C.border}`,borderRadius:7,color:C.text1,fontSize:12,padding:"7px 10px",outline:"none",boxSizing:"border-box"}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+      </div>
       <div style={{padding:"10px 18px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:7}}>
         <span className="live-dot"/><span style={{fontSize:11,color:C.text3}}>En ligne</span>
       </div>
@@ -284,12 +287,31 @@ function DashboardPage({orders,products,setPage}){
   const lowStock=products.filter(p=>p.stock<50&&p.stock>0).length;
   const outStock=products.filter(p=>p.stock===0).length;
 
-  // Sparkline — CA par jour sur 14 jours
+  // Tendance : cette semaine vs semaine précédente
+  const weekCA=(offset=0)=>{
+    const start=new Date(now);start.setDate(start.getDate()-offset*7-7);
+    const end=new Date(now);end.setDate(end.getDate()-offset*7);
+    return active.filter(o=>{const d=new Date(o.created_at);return d>=start&&d<=end}).reduce((s,o)=>s+parseFloat(o.total)+parseFloat(o.livraison||0),0);
+  };
+  const thisWeek=weekCA(0),lastWeek=weekCA(1);
+  const weekTrend=lastWeek>0?Math.round(((thisWeek-lastWeek)/lastWeek)*100):0;
+
+  // Top 5 produits vendus
+  const topProducts=useMemo(()=>{
+    const counts={};
+    active.forEach(o=>parseItems(o.items).forEach(i=>{counts[i.name]=(counts[i.name]||0)+i.qty}));
+    return Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  },[orders]);
+
+  // Sparkline CA 14 jours
   const sparkData=useMemo(()=>{
     const days=14;const data=Array(days).fill(0);
     active.forEach(o=>{const d=new Date(o.created_at);const diff=Math.floor((now-d)/(1000*60*60*24));if(diff<days)data[days-1-diff]+=parseFloat(o.total)+parseFloat(o.livraison||0)});
     return data;
   },[orders]);
+
+  // Commandes en attente de traitement
+  const pending=orders.filter(o=>["nouveau","payé"].includes(o.status)).length;
 
   return<div className="fade-in" style={{display:"flex",flexDirection:"column",gap:20}}>
     <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
@@ -301,46 +323,51 @@ function DashboardPage({orders,products,setPage}){
         </div>
       </div>
       <div style={{display:"flex",gap:8}}>
-        <Btn variant="ghost" onClick={()=>window.open("https://anserfj.github.io/telegram-shop/","_blank")} style={{fontSize:12}}>🛒 Boutique</Btn>
-        <Btn onClick={()=>setPage("orders")} style={{fontSize:12}}>+ Commandes</Btn>
+        {pending>0&&<div style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",background:"#f0b42918",border:`1px solid ${C.gold}33`,borderRadius:8,fontSize:12,color:C.gold,cursor:"pointer"}} onClick={()=>setPage("orders")}>
+          ⏳ {pending} à traiter
+        </div>}
+        <Btn onClick={()=>setPage("orders")} style={{fontSize:12}}>Commandes →</Btn>
       </div>
     </div>
 
-    {/* Stats principales */}
+    {/* Stats */}
     <div className="stats-grid">
-      <StatCard icon="💰" label="CA total" value={fmt(totalCA)} sub={`${fmt(monthCA)} ce mois`} color={C.accent} trend={12} onClick={()=>setPage("orders")}/>
-      <StatCard icon="📦" label="Commandes" value={String(orders.length)} sub={`${newOrders} à traiter`} color={C.gold} trend={8} onClick={()=>setPage("orders")}/>
+      <StatCard icon="💰" label="CA total" value={fmt(totalCA)} sub={`${fmt(monthCA)} ce mois`} color={C.accent} trend={weekTrend} onClick={()=>setPage("orders")}/>
+      <StatCard icon="📦" label="Commandes" value={String(orders.length)} sub={`${newOrders} nouvelles`} color={C.gold} trend={8} onClick={()=>setPage("orders")}/>
       <StatCard icon="🚚" label="Expédiées" value={String(shipped)} sub={`${active.length} actives`} color={C.green} onClick={()=>setPage("orders")}/>
-      <StatCard icon="💳" label="Panier moyen" value={fmt(avgOrder)} sub={`${monthOrders.length} cmds ce mois`} color={C.purple}/>
+      <StatCard icon="💳" label="Panier moyen" value={fmt(avgOrder)} sub={`${monthOrders.length} cmd ce mois`} color={C.purple}/>
     </div>
 
-    {/* Alertes stock */}
+    {/* Alertes */}
     {(lowStock>0||outStock>0)&&<div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-      {outStock>0&&<div style={{flex:1,minWidth:200,padding:"12px 16px",background:"#ff475710",border:`1px solid ${C.red}33`,borderRadius:10,display:"flex",alignItems:"center",gap:10,cursor:"pointer"}} onClick={()=>setPage("catalog")}>
-        <span style={{fontSize:20}}>⚠️</span>
-        <div><div style={{fontSize:13,fontWeight:600,color:C.red}}>{outStock} produit{outStock>1?"s":""} épuisé{outStock>1?"s":""}</div><div style={{fontSize:11,color:C.text3}}>Mettre à jour le stock</div></div>
+      {outStock>0&&<div style={{flex:1,minWidth:200,padding:"11px 14px",background:"#ff475710",border:`1px solid ${C.red}33`,borderRadius:10,display:"flex",alignItems:"center",gap:10,cursor:"pointer"}} onClick={()=>setPage("catalog")}>
+        <span style={{fontSize:18}}>⚠️</span>
+        <div><div style={{fontSize:13,fontWeight:600,color:C.red}}>{outStock} produit{outStock>1?"s":""} épuisé{outStock>1?"s":""}</div><div style={{fontSize:11,color:C.text3}}>Cliquer pour mettre à jour</div></div>
       </div>}
-      {lowStock>0&&<div style={{flex:1,minWidth:200,padding:"12px 16px",background:"#ff9f4310",border:`1px solid ${C.orange}33`,borderRadius:10,display:"flex",alignItems:"center",gap:10,cursor:"pointer"}} onClick={()=>setPage("catalog")}>
-        <span style={{fontSize:20}}>📉</span>
-        <div><div style={{fontSize:13,fontWeight:600,color:C.orange}}>{lowStock} produit{lowStock>1?"s":""} en stock faible</div><div style={{fontSize:11,color:C.text3}}>Moins de 50 unités</div></div>
+      {lowStock>0&&<div style={{flex:1,minWidth:200,padding:"11px 14px",background:"#ff9f4310",border:`1px solid ${C.orange}33`,borderRadius:10,display:"flex",alignItems:"center",gap:10,cursor:"pointer"}} onClick={()=>setPage("catalog")}>
+        <span style={{fontSize:18}}>📉</span>
+        <div><div style={{fontSize:13,fontWeight:600,color:C.orange}}>{lowStock} produit{lowStock>1?"s":""} stock faible</div><div style={{fontSize:11,color:C.text3}}>&lt; 50 unités</div></div>
       </div>}
     </div>}
 
-    <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:16,flexWrap:"wrap"}}>
-      {/* Graphique CA */}
+    <div style={{display:"grid",gridTemplateColumns:"1.8fr 1fr",gap:16,flexWrap:"wrap"}}>
+      {/* CA 14 jours */}
       <Card>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-          <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em"}}>CA — 14 derniers jours</div>
-          <span style={{fontSize:12,color:C.accent,fontWeight:600}}>{fmt(sparkData.reduce((a,b)=>a+b,0))}</span>
+          <div>
+            <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em"}}>CA — 14 derniers jours</div>
+            <div style={{fontSize:11,color:weekTrend>=0?C.green:C.red,marginTop:2,fontWeight:600}}>{weekTrend>=0?"↑":"↓"} {Math.abs(weekTrend)}% vs semaine précédente</div>
+          </div>
+          <span style={{fontSize:14,fontWeight:700,color:C.accent}}>{fmt(sparkData.reduce((a,b)=>a+b,0))}</span>
         </div>
-        <Sparkline data={sparkData} color={C.accent} height={60}/>
-        <div style={{display:"flex",justifyContent:"space-between",marginTop:6}}>
+        <Sparkline data={sparkData} color={C.accent} height={56}/>
+        <div style={{display:"flex",justifyContent:"space-between",marginTop:5}}>
           <span style={{fontSize:10,color:C.text3}}>J-14</span>
           <span style={{fontSize:10,color:C.text3}}>Aujourd'hui</span>
         </div>
       </Card>
 
-      {/* Répartition statuts */}
+      {/* Statuts */}
       <Card>
         <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em",marginBottom:14}}>Statuts</div>
         {Object.entries(STATUS).map(([k,v])=>{const n=orders.filter(o=>o.status===k).length;const pct=orders.length?Math.round(n/orders.length*100):0;return<div key={k} style={{marginBottom:10}}>
@@ -350,26 +377,43 @@ function DashboardPage({orders,products,setPage}){
       </Card>
     </div>
 
-    {/* Dernières commandes */}
-    <Card style={{padding:0,overflow:"hidden"}}>
-      <div style={{padding:"16px 20px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-        <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em"}}>Dernières commandes</div>
-        <button onClick={()=>setPage("orders")} style={{fontSize:12,color:C.accent,background:"none",border:"none",cursor:"pointer"}}>Tout voir →</button>
-      </div>
-      <table style={{width:"100%",borderCollapse:"collapse"}}>
-        <tbody>
-          {orders.slice(0,6).map((o,i)=><tr key={o.id} style={{borderBottom:i<5?`1px solid ${C.border}`:"none"}} className="row-hover">
-            <td style={{padding:"11px 20px",fontFamily:"'JetBrains Mono'",fontSize:12,color:C.accent}}>{o.id}</td>
-            <td style={{padding:"11px 12px",fontSize:13}}>{o.telegram_user}</td>
-            <td style={{padding:"11px 12px",fontSize:12,color:C.text3}}>{new Date(o.created_at).toLocaleDateString("fr-FR")}</td>
-            <td style={{padding:"11px 12px",fontSize:13,fontWeight:600}}>{fmt(parseFloat(o.total)+parseFloat(o.livraison||0))}</td>
-            <td style={{padding:"11px 20px"}}><Badge status={o.status}/></td>
-          </tr>)}
-        </tbody>
-      </table>
-    </Card>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,flexWrap:"wrap"}}>
+      {/* Top produits */}
+      <Card>
+        <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em",marginBottom:14}}>🏆 Top produits</div>
+        {topProducts.length===0?<div style={{color:C.text3,fontSize:13}}>Aucune vente</div>:topProducts.map(([name,qty],i)=>{
+          const maxQty=topProducts[0][1];
+          return<div key={name} style={{marginBottom:10}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+              <span style={{fontSize:12,color:C.text1}}><span style={{color:C.text3,marginRight:6}}>#{i+1}</span>{name}</span>
+              <span style={{fontSize:12,fontWeight:700,color:C.accent}}>{qty} u.</span>
+            </div>
+            <div style={{height:3,background:C.border,borderRadius:2}}><div style={{height:"100%",width:`${(qty/maxQty)*100}%`,background:C.accent,borderRadius:2}}/></div>
+          </div>
+        })}
+      </Card>
+
+      {/* Dernières commandes */}
+      <Card style={{padding:0,overflow:"hidden"}}>
+        <div style={{padding:"14px 18px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em"}}>Récentes</div>
+          <button onClick={()=>setPage("orders")} style={{fontSize:12,color:C.accent,background:"none",border:"none",cursor:"pointer"}}>Tout voir →</button>
+        </div>
+        {orders.slice(0,5).map((o,i)=><div key={o.id} style={{padding:"10px 18px",borderBottom:i<4?`1px solid ${C.border}`:"none",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer"}} onClick={()=>setPage("orders")} className="row-hover">
+          <div>
+            <div style={{fontSize:12,fontFamily:"'JetBrains Mono'",color:C.accent}}>{o.id}</div>
+            <div style={{fontSize:11,color:C.text3}}>{o.telegram_user}</div>
+          </div>
+          <div style={{textAlign:"right"}}>
+            <div style={{fontSize:12,fontWeight:700}}>{fmt(parseFloat(o.total)+parseFloat(o.livraison||0))}</div>
+            <Badge status={o.status}/>
+          </div>
+        </div>)}
+      </Card>
+    </div>
   </div>
 }
+
 
 /* ── ORDERS ── */
 function OrdersPage({orders,setOrders,loading,reload,selectedOrder,setSelectedOrder}){
@@ -389,10 +433,42 @@ function OrdersPage({orders,setOrders,loading,reload,selectedOrder,setSelectedOr
 
   useEffect(()=>{if(selected)setNote(selected.note||"")},[selected]);
 
+  // ── Gestion intelligente du stock ──────────────────────────────
+  // Stock déduit quand : nouveau → payé
+  // Stock remis quand  : annulé (depuis n'importe quel statut sauf nouveau)
+  // Stock re-déduit si : annulé → payé
   const updateStatus=async(id,status)=>{
     setUpdating(true);
-    try{await sbPatch("orders",id,{status});setOrders(prev=>prev.map(o=>o.id===id?{...o,status}:o));setSelected(prev=>prev?.id===id?{...prev,status}:prev)}
-    catch(e){alert(e.message)}
+    try{
+      const order=orders.find(o=>o.id===id);
+      if(!order){setUpdating(false);return;}
+      const prevStatus=order.status;
+      await sbPatch("orders",id,{status});
+      setOrders(prev=>prev.map(o=>o.id===id?{...o,status}:o));
+      setSelected(prev=>prev?.id===id?{...prev,status}:prev);
+
+      const items=parseItems(order.items);
+
+      // Déduire le stock : nouveau/annulé → payé
+      if(status==="payé"&&(prevStatus==="nouveau"||prevStatus==="annulé")){
+        for(const item of items){
+          const prod=await sbGet("products",`?name=eq.${encodeURIComponent(item.name)}&select=id,stock`).catch(()=>[]);
+          if(prod[0]){
+            const newStock=Math.max(0,prod[0].stock-item.qty);
+            await sbPatch("products",prod[0].id,{stock:newStock}).catch(()=>{});
+          }
+        }
+      }
+      // Remettre le stock : (payé/traité/expédié) → annulé
+      if(status==="annulé"&&prevStatus!=="nouveau"&&prevStatus!=="annulé"){
+        for(const item of items){
+          const prod=await sbGet("products",`?name=eq.${encodeURIComponent(item.name)}&select=id,stock`).catch(()=>[]);
+          if(prod[0]){
+            await sbPatch("products",prod[0].id,{stock:prod[0].stock+item.qty}).catch(()=>{});
+          }
+        }
+      }
+    }catch(e){alert(e.message)}
     setUpdating(false);
   };
 
@@ -409,6 +485,29 @@ function OrdersPage({orders,setOrders,loading,reload,selectedOrder,setSelectedOr
     const a=document.createElement("a");a.href="data:text/csv;charset=utf-8,"+encodeURIComponent(csv);a.download=`commandes_${new Date().toISOString().slice(0,10)}.csv`;a.click();
   };
 
+  const printOrder=o=>{
+    const li=o.livraison_info?(typeof o.livraison_info==="string"?JSON.parse(o.livraison_info):o.livraison_info):null;
+    const items=parseItems(o.items);
+    const w=window.open("","_blank");
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Commande ${o.id}</title><style>body{font-family:sans-serif;max-width:600px;margin:40px auto;color:#111;font-size:14px}h1{font-size:22px;margin-bottom:4px}table{width:100%;border-collapse:collapse;margin:16px 0}td,th{padding:8px 10px;border:1px solid #ddd;text-align:left}th{background:#f5f5f5}tfoot td{font-weight:700}@media print{button{display:none}}</style></head><body>
+    <button onclick="window.print()" style="margin-bottom:20px;padding:8px 16px;cursor:pointer">🖨️ Imprimer</button>
+    <h1>Commande ${o.id}</h1><p style="color:#666">${new Date(o.created_at).toLocaleString("fr-FR")} · ${o.telegram_user}</p>
+    ${li?`<h3>Livraison</h3><p>${li.prenom||""} ${li.nom||""}<br>${li.adresse||""}<br>${li.cp||""} ${li.ville||""}<br>${li.tel||""}</p>`:""}
+    <h3>Articles</h3>
+    <table><thead><tr><th>Produit</th><th>Goût</th><th>Qté</th><th>P.U.</th><th>Total</th></tr></thead><tbody>
+    ${items.map(i=>`<tr><td>${i.name}</td><td>${i.gout||"-"}</td><td>${i.qty}</td><td>${parseFloat(i.price).toFixed(2)} €</td><td>${(i.qty*i.price).toFixed(2)} €</td></tr>`).join("")}
+    </tbody><tfoot><tr><td colspan="4">Livraison</td><td>${parseFloat(o.livraison||0)===0?"Offerte":parseFloat(o.livraison).toFixed(2)+" €"}</td></tr>
+    <tr><td colspan="4"><strong>Total TTC</strong></td><td><strong>${(parseFloat(o.total)+parseFloat(o.livraison||0)).toFixed(2)} €</strong></td></tr></tfoot></table>
+    <p>Statut : <strong>${o.status}</strong></p>
+    ${o.note?`<p>Note : ${o.note}</p>`:""}
+    </body></html>`);w.document.close();
+  };
+
+  const copyId=id=>{navigator.clipboard.writeText(id).catch(()=>{});/* silent */};
+
+  const [currentPage,setCurrentPage]=useState(1);
+  const PAGE_SIZE=20;
+
   const filtered=useMemo(()=>{
     let r=orders.filter(o=>{
       if(filter!=="tous"&&o.status!==filter)return false;
@@ -424,6 +523,8 @@ function OrdersPage({orders,setOrders,loading,reload,selectedOrder,setSelectedOr
     return r;
   },[orders,filter,search,sort,dateFrom,dateTo]);
 
+  const totalPages=Math.ceil(filtered.length/PAGE_SIZE);
+  const paginated=filtered.slice((currentPage-1)*PAGE_SIZE,currentPage*PAGE_SIZE);
   const totalFiltered=filtered.reduce((s,o)=>s+parseFloat(o.total)+parseFloat(o.livraison||0),0);
 
   return<div className="fade-in" style={{display:"flex",flexDirection:"column",gap:16}}>
@@ -461,7 +562,7 @@ function OrdersPage({orders,setOrders,loading,reload,selectedOrder,setSelectedOr
               {["ID","Client","Date","Total","Statut","Action"].map((h,i)=><th key={h} className={i>=2&&i<=3?"hide-mobile":""} style={{padding:"10px 14px",textAlign:"left",fontSize:10,color:C.text3,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",whiteSpace:"nowrap"}}>{h}</th>)}
             </tr></thead>
             <tbody>
-              {filtered.map((o,i)=><tr key={o.id} onClick={()=>setSelected(selected?.id===o.id?null:o)} className="row-hover" style={{borderBottom:i<filtered.length-1?`1px solid ${C.border}`:"none",background:selected?.id===o.id?C.accentDim:"transparent",transition:"background .1s"}}>
+              {paginated.map((o,i)=><tr key={o.id} onClick={()=>setSelected(selected?.id===o.id?null:o)} className="row-hover" style={{borderBottom:i<paginated.length-1?`1px solid ${C.border}`:"none",background:selected?.id===o.id?C.accentDim:"transparent",transition:"background .1s"}}>
                 <td style={{padding:"11px 14px",fontFamily:"'JetBrains Mono'",fontSize:11,color:C.accent,whiteSpace:"nowrap"}}>{o.id}</td>
                 <td style={{padding:"11px 14px",fontSize:13}}>{o.telegram_user}</td>
                 <td className="hide-mobile" style={{padding:"11px 14px",fontSize:11,color:C.text3,whiteSpace:"nowrap"}}>{new Date(o.created_at).toLocaleDateString("fr-FR")}</td>
@@ -477,14 +578,35 @@ function OrdersPage({orders,setOrders,loading,reload,selectedOrder,setSelectedOr
             </tbody>
           </table>
         </Card>
+        {/* Pagination */}
+        {totalPages>1&&<div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginTop:12}}>
+          <button onClick={()=>setCurrentPage(p=>Math.max(1,p-1))} disabled={currentPage===1} style={{padding:"5px 12px",background:C.card,border:`1px solid ${C.border}`,borderRadius:7,color:C.text2,cursor:currentPage===1?"not-allowed":"pointer",fontSize:12,opacity:currentPage===1?0.4:1}}>← Préc.</button>
+          <div style={{display:"flex",gap:4}}>
+            {Array.from({length:Math.min(5,totalPages)},(_, i)=>{
+              let p;
+              if(totalPages<=5)p=i+1;
+              else if(page<=3)p=i+1;
+              else if(page>=totalPages-2)p=totalPages-4+i;
+              else p=page-2+i;
+              return<button key={p} onClick={()=>setCurrentPage(p)} style={{width:30,height:30,borderRadius:7,border:`1px solid ${currentPage===p?C.accent:C.border}`,background:currentPage===p?C.accent:"transparent",color:currentPage===p?C.bg:C.text2,cursor:"pointer",fontSize:12,fontWeight:currentPage===p?700:400}}>{p}</button>
+            })}
+          </div>
+          <button onClick={()=>setCurrentPage(p=>Math.min(totalPages,p+1))} disabled={currentPage===totalPages} style={{padding:"5px 12px",background:C.card,border:`1px solid ${C.border}`,borderRadius:7,color:C.text2,cursor:currentPage===totalPages?"not-allowed":"pointer",fontSize:12,opacity:currentPage===totalPages?0.4:1}}>Suiv. →</button>
+          <span style={{fontSize:11,color:C.text3}}>Page {currentPage}/{totalPages} · {filtered.length} résultats</span>
+        </div>}
       </div>
 
       {/* Panneau détail */}
       {selected&&<div className="scale-in" style={{width:"100%",maxWidth:340,flexShrink:0}}>
         <Card style={{padding:18}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
-            <div style={{fontFamily:"'JetBrains Mono'",fontSize:13,color:C.accent,fontWeight:700}}>{selected.id}</div>
-            <button onClick={()=>setSelected(null)} style={{background:"none",border:"none",color:C.text3,cursor:"pointer",fontSize:18}}>×</button>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <div style={{fontFamily:"'JetBrains Mono'",fontSize:13,color:C.accent,fontWeight:700,cursor:"pointer"}} onClick={()=>copyId(selected.id)} title="Copier l'ID">{selected.id} 📋</div>
+            </div>
+            <div style={{display:"flex",gap:6}}>
+              <button onClick={()=>printOrder(selected)} title="Imprimer" style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:7,color:C.text2,cursor:"pointer",padding:"4px 9px",fontSize:12}}>🖨️</button>
+              <button onClick={()=>setSelected(null)} style={{background:"none",border:"none",color:C.text3,cursor:"pointer",fontSize:18}}>×</button>
+            </div>
           </div>
           <div style={{display:"flex",flexDirection:"column",gap:14}}>
             {/* Client */}
@@ -701,6 +823,11 @@ function CatalogPage({products,setProducts,loading,reload}){
 
   const remove=async id=>{if(!confirm("Supprimer ?"))return;try{await sbDelete("products",id);setProducts(prev=>prev.filter(p=>p.id!==id));showToast("🗑️ Supprimé")}catch(e){alert(e.message)}};
 
+  const duplicate=async p=>{
+    const body={name:`${p.name} (copie)`,cat:p.cat,emoji:p.emoji,price:p.price,compare_price:p.compare_price||null,unit:p.unit,min_qty:p.min_qty,stock:0,badge:null,gouts:p.gouts||[],image_url:p.image_url||null,video_url:p.video_url||null,gallery:p.gallery||[]};
+    try{const[r]=await sbPost("products",body);setProducts(prev=>[...prev,r]);showToast("✅ Dupliqué — stock mis à 0")}catch(e){alert(e.message)}
+  };
+
   const bulkUpdateBadge=async badge=>{
     for(const id of bulkSelected){try{await sbPatch("products",id,{badge:badge||null});setProducts(prev=>prev.map(p=>bulkSelected.includes(p.id)?{...p,badge:badge||null}:p))}catch(e){}}
     setBulkSelected([]);showToast(`✅ ${bulkSelected.length} produits mis à jour`);
@@ -785,6 +912,7 @@ function CatalogPage({products,setProducts,loading,reload}){
                 <td style={{padding:"10px 14px"}}>
                   <div style={{display:"flex",gap:6}}>
                     <Btn variant="ghost" style={{padding:"4px 10px",fontSize:11}} onClick={()=>openEdit(p)}>✏️</Btn>
+                    <Btn variant="ghost" style={{padding:"4px 8px",fontSize:11}} title="Dupliquer" onClick={()=>duplicate(p)}>⧉</Btn>
                     <Btn variant="danger" style={{padding:"4px 8px",fontSize:11}} onClick={()=>remove(p.id)}>🗑</Btn>
                   </div>
                 </td>
@@ -823,8 +951,9 @@ function CatalogPage({products,setProducts,loading,reload}){
                 {gouts.length>0&&<span style={{fontSize:10,color:C.accent}}>{gouts.length} goûts</span>}
               </div>
               <div style={{display:"flex",gap:6,marginTop:8}} onClick={e=>e.stopPropagation()}>
-                <Btn variant="ghost" style={{flex:1,justifyContent:"center",padding:"5px",fontSize:11}} onClick={()=>openEdit(p)}>✏️ Modifier</Btn>
-                <Btn variant="danger" style={{padding:"5px 9px",fontSize:11}} onClick={()=>remove(p.id)}>🗑</Btn>
+                <Btn variant="ghost" style={{flex:1,justifyContent:"center",padding:"5px",fontSize:11}} onClick={()=>openEdit(p)}>✏️</Btn>
+                <Btn variant="ghost" style={{padding:"5px 8px",fontSize:11}} title="Dupliquer" onClick={()=>duplicate(p)}>⧉</Btn>
+                <Btn variant="danger" style={{padding:"5px 8px",fontSize:11}} onClick={()=>remove(p.id)}>🗑</Btn>
               </div>
             </div>
           </Card>
