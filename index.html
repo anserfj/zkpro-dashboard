@@ -694,18 +694,49 @@ function MessagesPage(){
     if(!confirm(`Envoyer ce message à ${users.length} utilisateurs ?`)) return;
     setBroadcasting(true);
     let ok=0, fail=0;
+    const sentAt = new Date().toISOString();
     for(const u of users){
       try {
-        await sendTgMessage(u.id, broadcast);
-        await fetch(`${SB_URL}/rest/v1/bot_messages`,{method:"POST",headers:{...SBH,"Prefer":"return=minimal"},body:JSON.stringify({telegram_id:u.id,direction:"out",text:broadcast})});
+        const tgMessageId = await sendTgMessage(u.id, broadcast);
+        await fetch(`${SB_URL}/rest/v1/bot_messages`,{method:"POST",headers:{...SBH,"Prefer":"return=minimal"},
+          body:JSON.stringify({telegram_id:u.id,direction:"out",text:broadcast,tg_message_id:tgMessageId,created_at:sentAt})});
         ok++;
       } catch(e){ fail++; }
-      await new Promise(r=>setTimeout(r,50)); // éviter rate limit
+      await new Promise(r=>setTimeout(r,50));
     }
     showToast(`✅ Envoyé à ${ok} utilisateurs${fail>0?` (${fail} échecs)`:""}`);
     setBroadcast("");
     setBroadcasting(false);
     fetchData();
+  };
+
+  // Grouper les broadcasts par texte+date (même message envoyé à tous)
+  const broadcastGroups = () => {
+    const out = messages.filter(m=>m.direction==="out");
+    const groups = {};
+    out.forEach(m=>{
+      const key = m.text + "|" + m.created_at.slice(0,16);
+      if(!groups[key]) groups[key] = {text:m.text, created_at:m.created_at, msgs:[]};
+      groups[key].msgs.push(m);
+    });
+    return Object.values(groups).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+  };
+
+  const deleteBroadcastGroup = async (group) => {
+    if(!confirm(`Supprimer ce broadcast pour ${group.msgs.length} utilisateurs ?`)) return;
+    for(const m of group.msgs){
+      if(m.tg_message_id){
+        try {
+          await fetch(`${TG_API}/deleteMessage`,{method:"POST",headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({chat_id:m.telegram_id,message_id:m.tg_message_id})});
+        } catch(e){}
+      }
+      try {
+        await fetch(`${SB_URL}/rest/v1/bot_messages?id=eq.${m.id}`,{method:"DELETE",headers:SBH});
+      } catch(e){}
+    }
+    setMessages(prev=>prev.filter(m=>!group.msgs.find(gm=>gm.id===m.id)));
+    showToast("🗑️ Broadcast supprimé");
   };
 
   const displayName = u => u.username ? `@${u.username}` : `${u.first_name||""}${u.last_name?` ${u.last_name}`:""}`.trim() || `User ${u.id}`;
@@ -756,13 +787,29 @@ function MessagesPage(){
 
         {/* Historique broadcasts */}
         <div style={{marginTop:20}}>
-          <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em",marginBottom:12,color:C.text2}}>Derniers broadcasts envoyés</div>
-          {messages.filter(m=>m.direction==="out"&&!selected).slice(0,10).map(m=><div key={m.id} style={{padding:"10px 14px",background:C.card,border:`1px solid ${C.border}`,borderRadius:8,marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
-            <div style={{flex:1}}>
-              <div style={{fontSize:13,color:C.text1,marginBottom:3}}>{m.text}</div>
-              <div style={{fontSize:11,color:C.text3}}>{new Date(m.created_at).toLocaleString("fr-FR")} · à {m.telegram_id}</div>
+          <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em",marginBottom:12,color:C.text2}}>
+            Historique broadcasts ({broadcastGroups().length})
+          </div>
+          {broadcastGroups().length===0&&<div style={{padding:20,textAlign:"center",color:C.text3,fontSize:13}}>Aucun broadcast envoyé</div>}
+          {broadcastGroups().map((g,i)=><div key={i} style={{padding:"14px 16px",background:C.card,border:`1px solid ${C.border}`,borderRadius:10,marginBottom:10}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:8}}>
+              <div style={{flex:1}}>
+                <div style={{fontSize:13,color:C.text1,lineHeight:1.5,whiteSpace:"pre-wrap"}}>{g.text}</div>
+              </div>
+              <button onClick={()=>deleteBroadcastGroup(g)}
+                style={{background:"none",border:`1px solid ${C.red}44`,borderRadius:6,color:C.red,cursor:"pointer",fontSize:11,padding:"4px 10px",flexShrink:0,fontFamily:"'DM Sans',sans-serif"}}>
+                🗑️ Supprimer
+              </button>
             </div>
-            <button onClick={()=>deleteMsg(m)} style={{background:"none",border:"none",color:C.text3,cursor:"pointer",fontSize:16,flexShrink:0}} title="Supprimer">🗑️</button>
+            <div style={{display:"flex",alignItems:"center",gap:12}}>
+              <span style={{fontSize:11,color:C.text3}}>{new Date(g.created_at).toLocaleString("fr-FR")}</span>
+              <span style={{fontSize:11,background:C.accentDim,color:C.accent,border:`1px solid ${C.accentMid}`,borderRadius:4,padding:"1px 8px"}}>
+                📢 {g.msgs.length} destinataire{g.msgs.length>1?"s":""}
+              </span>
+              <span style={{fontSize:11,color:g.msgs.some(m=>m.tg_message_id)?C.green:C.orange}}>
+                {g.msgs.some(m=>m.tg_message_id)?"✓ Supprimable sur Telegram":"⚠ Sans ID Telegram"}
+              </span>
+            </div>
           </div>)}
         </div>
       </div>
