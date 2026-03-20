@@ -754,6 +754,7 @@ function MessagesPage({onRead, onGoToOrder}){
   const renderMessage = m => {
     const orderId = getOrderId(m.text);
     const isOrderCard = m.direction==="out" && orderId && m.text?.includes("Récap commande");
+
     if(isOrderCard){
       return <div onClick={()=>onGoToOrder&&onGoToOrder(orderId)}
         style={{padding:"10px 14px",background:C.bg,border:`1.5px solid ${C.accentMid}`,borderRadius:12,cursor:"pointer",transition:"all .15s"}}
@@ -767,8 +768,19 @@ function MessagesPage({onRead, onGoToOrder}){
         <div style={{fontSize:10,color:C.accent,marginTop:4,fontWeight:600}}>Voir la commande →</div>
       </div>;
     }
-    return <div style={{padding:"9px 13px",borderRadius:m.direction==="out"?"16px 16px 4px 16px":"16px 16px 16px 4px",background:m.direction==="out"?C.accent:C.surface,color:m.direction==="out"?C.bg:C.text1,fontSize:13,lineHeight:1.5,wordBreak:"break-word"}}>
-      {m.text}
+
+    const isImg = m.media_url && /\.(jpg|jpeg|png|webp|gif)(\?|$)/i.test(m.media_url);
+    const isVid = m.media_url && /\.(mp4|webm|mov)(\?|$)/i.test(m.media_url);
+    const isDoc = m.media_url && !isImg && !isVid;
+
+    return <div style={{padding: m.media_url ? "6px" : "9px 13px",borderRadius:m.direction==="out"?"16px 16px 4px 16px":"16px 16px 16px 4px",background:m.direction==="out"?C.accent:C.surface,color:m.direction==="out"?C.bg:C.text1,fontSize:13,lineHeight:1.5,wordBreak:"break-word",overflow:"hidden"}}>
+      {isImg && <img src={m.media_url} alt="photo" style={{width:"100%",maxWidth:260,borderRadius:10,display:"block",marginBottom:m.text&&m.text!=="📷 Photo"?6:0}} onClick={()=>window.open(m.media_url,"_blank")}/>}
+      {isVid && <video src={m.media_url} controls style={{width:"100%",maxWidth:260,borderRadius:10,display:"block",marginBottom:m.text&&m.text!=="🎬 Vidéo"?6:0}}/>}
+      {isDoc && <a href={m.media_url} target="_blank" style={{display:"flex",alignItems:"center",gap:8,padding:"6px 4px",color:m.direction==="out"?C.bg:C.accent,textDecoration:"none",marginBottom:m.text?6:0}}>
+        <span style={{fontSize:20}}>📎</span>
+        <span style={{fontSize:12,fontWeight:600,textDecoration:"underline"}}>{m.text?.replace("📎 ","")}</span>
+      </a>}
+      {m.text && m.text !== "📷 Photo" && m.text !== "🎬 Vidéo" && !isDoc && <span style={{padding: m.media_url ? "0 4px 4px" : 0,display:"block"}}>{m.text}</span>}
     </div>;
   };
 
