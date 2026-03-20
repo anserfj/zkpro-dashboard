@@ -432,6 +432,20 @@ function OrdersPage({orders,setOrders,loading,reload}){
                 <div style={{fontSize:11,color:C.text3,marginTop:3}}>×{item.qty} × {fmt(item.price)} = <strong style={{color:C.text2}}>{fmt(item.qty*item.price)}</strong></div>
               </div>)}
             </div>
+            {/* Infos de livraison */}
+            {selected.livraison_info && (() => {
+              const li = typeof selected.livraison_info === "string" ? JSON.parse(selected.livraison_info) : selected.livraison_info;
+              return <div style={{borderTop:`1px solid ${C.border}`,paddingTop:14}}>
+                <div style={{fontSize:11,color:C.text3,marginBottom:10,textTransform:"uppercase",letterSpacing:"0.08em"}}>📦 Livraison</div>
+                <div style={{background:C.surface,borderRadius:8,padding:"10px 12px",display:"flex",flexDirection:"column",gap:5}}>
+                  {li.prenom&&<div style={{display:"flex",gap:8}}><span style={{fontSize:11,color:C.text3,minWidth:64}}>Nom</span><span style={{fontSize:12,fontWeight:600}}>{li.prenom} {li.nom}</span></div>}
+                  {li.adresse&&<div style={{display:"flex",gap:8}}><span style={{fontSize:11,color:C.text3,minWidth:64}}>Adresse</span><span style={{fontSize:12}}>{li.adresse}</span></div>}
+                  {li.cp&&<div style={{display:"flex",gap:8}}><span style={{fontSize:11,color:C.text3,minWidth:64}}>Ville</span><span style={{fontSize:12}}>{li.cp} {li.ville}</span></div>}
+                  {li.tel&&<div style={{display:"flex",gap:8}}><span style={{fontSize:11,color:C.text3,minWidth:64}}>Tél</span><a href={`tel:${li.tel}`} style={{fontSize:12,color:C.accent,textDecoration:"none"}}>{li.tel}</a></div>}
+                  {li.note&&<div style={{display:"flex",gap:8}}><span style={{fontSize:11,color:C.text3,minWidth:64}}>Note</span><span style={{fontSize:12,color:C.text2,fontStyle:"italic"}}>{li.note}</span></div>}
+                </div>
+              </div>;
+            })()}
             <div style={{borderTop:`1px solid ${C.border}`,paddingTop:12}}>
               <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{fontSize:12,color:C.text2}}>Sous-total</span><span style={{fontSize:12,color:C.text2}}>{fmt(selected.total)}</span></div>
               <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}><span style={{fontSize:12,color:C.text2}}>Livraison</span><span style={{fontSize:12,color:parseFloat(selected.livraison)===0?C.green:C.text2}}>{parseFloat(selected.livraison)===0?"OFFERTE":fmt(selected.livraison)}</span></div>
@@ -617,6 +631,7 @@ function CatalogPage({products,setProducts,loading,reload}){
 }
 
 /* ── MESSAGES PAGE ── */
+/* ── MESSAGES PAGE ── */
 const BOT_TOKEN_DASH = "8700497448:AAG8DKiQ8d43FUIYU1j5d7IoDouq2DRI3-s";
 const TG_API = `https://api.telegram.org/bot${BOT_TOKEN_DASH}`;
 
@@ -627,161 +642,153 @@ async function sendTgMessage(chatId, text){
   return data?.result?.message_id || null;
 }
 
+async function sendTgFile(chatId, file){
+  const isImg=file.type.startsWith("image/"), isVid=file.type.startsWith("video/");
+  const endpoint=isImg?"sendPhoto":isVid?"sendVideo":"sendDocument";
+  const field=isImg?"photo":isVid?"video":"document";
+  const fd=new FormData(); fd.append("chat_id",chatId); fd.append(field,file);
+  const r=await fetch(`${TG_API}/${endpoint}`,{method:"POST",body:fd});
+  if(!r.ok) throw new Error("Upload échoué");
+  const data=await r.json();
+  return data?.result?.message_id||null;
+}
+
 function MessagesPage({onRead}){
-  const [users, setUsers]       = useState([]);
-  const [messages, setMessages] = useState([]);
-  const [selected, setSelected] = useState(null); // user selectionné pour conversation
-  const [loading, setLoading]   = useState(false);
-  const [reply, setReply]       = useState("");
-  const [sending, setSending]   = useState(false);
-  const [broadcast, setBroadcast] = useState("");
-  const [broadcasting, setBroadcasting] = useState(false);
-  const [tab, setTab]           = useState("inbox"); // inbox | broadcast
-  const [toast, setToast]       = useState("");
+  const [users,setUsers]=useState([]);
+  const [messages,setMessages]=useState([]);
+  const [selected,setSelected]=useState(null);
+  const [loading,setLoading]=useState(false);
+  const [reply,setReply]=useState("");
+  const [replyFile,setReplyFile]=useState(null);
+  const [sending,setSending]=useState(false);
+  const [broadcast,setBroadcast]=useState("");
+  const [broadcastFile,setBroadcastFile]=useState(null);
+  const [broadcasting,setBroadcasting]=useState(false);
+  const [tab,setTab]=useState("inbox");
+  const [toast,setToast]=useState("");
+  const messagesEndRef=useRef(null);
+  const fileRef=useRef(null);
+  const broadcastFileRef=useRef(null);
 
-  const showToast = msg => { setToast(msg); setTimeout(()=>setToast(""),2500); };
+  const showToast=msg=>{setToast(msg);setTimeout(()=>setToast(""),2500);};
+  const readIds=()=>JSON.parse(localStorage.getItem("zkpro_read_ids")||"[]");
+  const userMessages=uid=>messages.filter(m=>m.telegram_id===uid).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+  const lastMsg=u=>{const ms=messages.filter(m=>m.telegram_id===u.id);if(!ms.length)return null;return ms.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0];};
+  const unreadForUser=uid=>messages.filter(m=>m.telegram_id===uid&&m.direction==="in"&&!readIds().includes(m.id)).length;
+  const displayName=u=>u.username?`@${u.username}`:`${u.first_name||""}${u.last_name?` ${u.last_name}`:""}`.trim()||`User ${u.id}`;
 
-  // ── Helpers (définis avant les useEffect) ──
-  const readIds      = () => JSON.parse(localStorage.getItem("zkpro_read_ids")||"[]");
-  const userMessages = uid => messages.filter(m=>m.telegram_id===uid).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
-  const lastMsg      = u => { const msgs=messages.filter(m=>m.telegram_id===u.id); if(!msgs.length)return null; return msgs.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0]; };
-  const unreadForUser= uid => messages.filter(m=>m.telegram_id===uid&&m.direction==="in"&&!readIds().includes(m.id)).length;
-  const displayName  = u => u.username ? `@${u.username}` : `${u.first_name||""}${u.last_name?` ${u.last_name}`:""}`.trim() || `User ${u.id}`;
-
-  const markAllRead = (msgs) => {
-    const ids = msgs.filter(m=>m.direction==="in").map(m=>m.id);
-    const merged = [...new Set([...JSON.parse(localStorage.getItem("zkpro_read_ids")||"[]"), ...ids])].slice(-1000);
-    localStorage.setItem("zkpro_read_ids", JSON.stringify(merged));
-    if(onRead) onRead();
+  const markRead=(uid,msgs)=>{
+    const ids=(msgs||messages).filter(m=>m.telegram_id===uid&&m.direction==="in").map(m=>m.id);
+    const merged=[...new Set([...readIds(),...ids])].slice(-1000);
+    localStorage.setItem("zkpro_read_ids",JSON.stringify(merged));
+    if(onRead)onRead();
+  };
+  const markAllRead=msgs=>{
+    const ids=msgs.filter(m=>m.direction==="in").map(m=>m.id);
+    const merged=[...new Set([...readIds(),...ids])].slice(-1000);
+    localStorage.setItem("zkpro_read_ids",JSON.stringify(merged));
+    if(onRead)onRead();
   };
 
-  const fetchData = async (silent=false) => {
-    if(!silent) setLoading(true);
-    try {
-      const [u, m] = await Promise.all([
-        sbGet("bot_users","?order=last_seen.desc"),
-        sbGet("bot_messages","?order=created_at.desc&limit=500"),
-      ]);
-      setUsers(u);
-      setMessages(m);
-      if(!silent) markAllRead(m);
-    } catch(e){ console.error(e); }
-    if(!silent) setLoading(false);
+  const fetchData=async(silent=false)=>{
+    if(!silent)setLoading(true);
+    try{
+      const[u,m]=await Promise.all([sbGet("bot_users","?order=last_seen.desc"),sbGet("bot_messages","?order=created_at.desc&limit=500")]);
+      setUsers(u); setMessages(m);
+      if(!silent)markAllRead(m);
+    }catch(e){console.error(e);}
+    if(!silent)setLoading(false);
   };
 
-  useEffect(()=>{ fetchData(); },[]);
+  useEffect(()=>{fetchData();},[]);
+  useEffect(()=>{const t=setInterval(()=>fetchData(true),5000);return()=>clearInterval(t);},[]);
 
-  // Auto-refresh silencieux toutes les 5 secondes
+  // Scroll en bas à chaque nouveau message ou changement de conversation
   useEffect(()=>{
-    const t = setInterval(()=>fetchData(true), 5000);
-    return ()=>clearInterval(t);
-  },[]);
+    if(messagesEndRef.current) messagesEndRef.current.scrollIntoView({behavior:"smooth"});
+  },[messages,selected]);
 
   // Marquer comme lus quand on change de conversation
-  useEffect(()=>{
-    if(!selected || messages.length===0) return;
-    const userIn = messages.filter(m=>m.telegram_id===selected.id&&m.direction==="in").map(m=>m.id);
-    if(userIn.length===0) return;
-    const merged = [...new Set([...JSON.parse(localStorage.getItem("zkpro_read_ids")||"[]"), ...userIn])].slice(-1000);
-    localStorage.setItem("zkpro_read_ids", JSON.stringify(merged));
-    if(onRead) onRead();
-  },[selected]);
+  useEffect(()=>{if(selected)markRead(selected.id);},[selected]);
 
-
-  const deleteMsg = async msg => {
-    // Si message sortant avec tg_message_id → supprimer sur Telegram d'abord
-    if(msg.direction === "out" && msg.tg_message_id) {
-      try {
-        await fetch(`${TG_API}/deleteMessage`, {
-          method: "POST",
-          headers: {"Content-Type":"application/json"},
-          body: JSON.stringify({ chat_id: msg.telegram_id, message_id: msg.tg_message_id })
-        });
-      } catch(e){ console.warn("Telegram delete failed:", e); }
+  const deleteMsg=async msg=>{
+    if(msg.direction==="out"&&msg.tg_message_id){
+      try{await fetch(`${TG_API}/deleteMessage`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chat_id:msg.telegram_id,message_id:msg.tg_message_id})});}catch(e){}
     }
-    // Supprimer dans Supabase
-    try {
-      await fetch(`${SB_URL}/rest/v1/bot_messages?id=eq.${msg.id}`,{method:"DELETE",headers:SBH});
-      setMessages(prev=>prev.filter(m=>m.id!==msg.id));
-    } catch(e){ alert("Erreur: "+e.message); }
+    try{await fetch(`${SB_URL}/rest/v1/bot_messages?id=eq.${msg.id}`,{method:"DELETE",headers:SBH});setMessages(prev=>prev.filter(m=>m.id!==msg.id));}catch(e){}
   };
 
-  const sendReply = async () => {
-    if(!reply.trim()||!selected) return;
+  const sendReply=async()=>{
+    if(!selected||(!reply.trim()&&!replyFile))return;
     setSending(true);
-    try {
-      const tgMessageId = await sendTgMessage(selected.id, reply);
-      const newMsg = {id:Date.now(),telegram_id:selected.id,direction:"out",text:reply,tg_message_id:tgMessageId,created_at:new Date().toISOString()};
-      await fetch(`${SB_URL}/rest/v1/bot_messages`,{method:"POST",headers:{...SBH,"Prefer":"return=minimal"},body:JSON.stringify({telegram_id:selected.id,direction:"out",text:reply,tg_message_id:tgMessageId})});
+    try{
+      let tgMsgId=null;
+      let displayText=reply.trim();
+      if(replyFile){
+        tgMsgId=await sendTgFile(selected.id,replyFile);
+        if(reply.trim())await sendTgMessage(selected.id,reply.trim());
+        displayText=`📎 ${replyFile.name}${reply.trim()?` — ${reply.trim()}`:""}`;
+      }else{
+        tgMsgId=await sendTgMessage(selected.id,reply.trim());
+      }
+      const newMsg={id:Date.now(),telegram_id:selected.id,direction:"out",text:displayText,tg_message_id:tgMsgId,created_at:new Date().toISOString()};
+      await fetch(`${SB_URL}/rest/v1/bot_messages`,{method:"POST",headers:{...SBH,"Prefer":"return=minimal"},body:JSON.stringify({telegram_id:selected.id,direction:"out",text:displayText,tg_message_id:tgMsgId})});
       setMessages(prev=>[...prev,newMsg]);
-      setReply("");
-      showToast("✅ Message envoyé !");
-    } catch(e){ alert("Erreur: "+e.message); }
+      setReply(""); setReplyFile(null); if(fileRef.current)fileRef.current.value="";
+      showToast("✅ Envoyé !");
+    }catch(e){alert("Erreur: "+e.message);}
     setSending(false);
   };
 
-  const sendBroadcast = async () => {
-    if(!broadcast.trim()) return;
-    if(!confirm(`Envoyer ce message à ${users.length} utilisateurs ?`)) return;
+  const sendBroadcast=async()=>{
+    if(!broadcast.trim()&&!broadcastFile)return;
+    if(!confirm(`Envoyer à ${users.length} utilisateurs ?`))return;
     setBroadcasting(true);
-    let ok=0, fail=0;
-    const sentAt = new Date().toISOString();
+    let ok=0,fail=0;
+    const sentAt=new Date().toISOString();
+    const displayText=broadcastFile?`📎 ${broadcastFile.name}${broadcast.trim()?` — ${broadcast.trim()}`:""}`:broadcast.trim();
     for(const u of users){
-      try {
-        const tgMessageId = await sendTgMessage(u.id, broadcast);
-        await fetch(`${SB_URL}/rest/v1/bot_messages`,{method:"POST",headers:{...SBH,"Prefer":"return=minimal"},
-          body:JSON.stringify({telegram_id:u.id,direction:"out",text:broadcast,tg_message_id:tgMessageId,created_at:sentAt})});
+      try{
+        let tgMsgId=null;
+        if(broadcastFile){tgMsgId=await sendTgFile(u.id,broadcastFile);if(broadcast.trim())await sendTgMessage(u.id,broadcast.trim());}
+        else{tgMsgId=await sendTgMessage(u.id,broadcast.trim());}
+        await fetch(`${SB_URL}/rest/v1/bot_messages`,{method:"POST",headers:{...SBH,"Prefer":"return=minimal"},body:JSON.stringify({telegram_id:u.id,direction:"out",text:displayText,tg_message_id:tgMsgId,created_at:sentAt})});
         ok++;
-      } catch(e){ fail++; }
+      }catch(e){fail++;}
       await new Promise(r=>setTimeout(r,50));
     }
     showToast(`✅ Envoyé à ${ok} utilisateurs${fail>0?` (${fail} échecs)`:""}`);
-    setBroadcast("");
-    setBroadcasting(false);
-    fetchData();
+    setBroadcast(""); setBroadcastFile(null); if(broadcastFileRef.current)broadcastFileRef.current.value="";
+    setBroadcasting(false); fetchData();
   };
 
-  // Grouper les broadcasts par texte+date (même message envoyé à tous)
-  const broadcastGroups = () => {
-    const out = messages.filter(m=>m.direction==="out");
-    const groups = {};
-    out.forEach(m=>{
-      const key = m.text + "|" + m.created_at.slice(0,16);
-      if(!groups[key]) groups[key] = {text:m.text, created_at:m.created_at, msgs:[]};
-      groups[key].msgs.push(m);
-    });
+  const broadcastGroups=()=>{
+    const out=messages.filter(m=>m.direction==="out");
+    const groups={};
+    out.forEach(m=>{const key=m.text+"|"+m.created_at.slice(0,16);if(!groups[key])groups[key]={text:m.text,created_at:m.created_at,msgs:[]};groups[key].msgs.push(m);});
     return Object.values(groups).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
   };
 
-  const deleteBroadcastGroup = async (group) => {
-    if(!confirm(`Supprimer ce broadcast pour ${group.msgs.length} utilisateurs ?`)) return;
+  const deleteBroadcastGroup=async group=>{
+    if(!confirm(`Supprimer ce broadcast pour ${group.msgs.length} utilisateurs ?`))return;
     for(const m of group.msgs){
-      if(m.tg_message_id){
-        try {
-          await fetch(`${TG_API}/deleteMessage`,{method:"POST",headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({chat_id:m.telegram_id,message_id:m.tg_message_id})});
-        } catch(e){}
-      }
-      try {
-        await fetch(`${SB_URL}/rest/v1/bot_messages?id=eq.${m.id}`,{method:"DELETE",headers:SBH});
-      } catch(e){}
+      if(m.tg_message_id){try{await fetch(`${TG_API}/deleteMessage`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chat_id:m.telegram_id,message_id:m.tg_message_id})});}catch(e){}}
+      try{await fetch(`${SB_URL}/rest/v1/bot_messages?id=eq.${m.id}`,{method:"DELETE",headers:SBH});}catch(e){}
     }
     setMessages(prev=>prev.filter(m=>!group.msgs.find(gm=>gm.id===m.id)));
     showToast("🗑️ Broadcast supprimé");
   };
 
+  return <div className="fade-in" style={{display:"flex",flexDirection:"column",height:"calc(100vh - 64px)"}}>
+    {toast&&<div style={{position:"fixed",bottom:24,right:24,background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 20px",fontSize:14,zIndex:999,boxShadow:"0 4px 20px #00000080"}}>{toast}</div>}
 
-  return <div className="fade-in" style={{display:"flex",flexDirection:"column",gap:0,height:"calc(100vh - 64px)"}}>
-    {toast&&<div style={{position:"fixed",bottom:24,right:24,background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 20px",fontSize:14,zIndex:999}}>{toast}</div>}
-
-    {/* Header */}
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexShrink:0}}>
       <div>
         <div style={{fontFamily:"'Bebas Neue'",fontSize:36,letterSpacing:"0.05em"}}>Messages</div>
-        <div style={{fontSize:12,color:C.text3,marginTop:2}}>{users.length} utilisateurs · {messages.filter(m=>m.direction==="in").length} messages reçus</div>
+        <div style={{fontSize:12,color:C.text3,marginTop:2}}>{users.length} utilisateurs · {messages.filter(m=>m.direction==="in").length} reçus</div>
       </div>
       <div style={{display:"flex",gap:8}}>
-        <Btn variant="ghost" onClick={fetchData}>🔄 Actualiser</Btn>
+        <Btn variant="ghost" onClick={()=>fetchData()}>🔄</Btn>
         <div style={{display:"flex",background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
           {["inbox","broadcast"].map(t=><button key={t} onClick={()=>setTab(t)} style={{padding:"8px 16px",background:tab===t?C.accent:"transparent",color:tab===t?C.bg:C.text2,border:"none",cursor:"pointer",fontSize:13,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>
             {t==="inbox"?"💬 Conversations":"📢 Broadcast"}
@@ -790,72 +797,61 @@ function MessagesPage({onRead}){
       </div>
     </div>
 
-    {loading ? <div style={{padding:60,display:"flex",justifyContent:"center"}}><div className="spinner"/></div> :
+    {loading?<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center"}}><div className="spinner"/></div>:
 
-    tab==="broadcast" ? (
-      /* ── BROADCAST ── */
-      <div style={{maxWidth:600}}>
-        <Card>
-          <div style={{fontFamily:"'Bebas Neue'",fontSize:20,letterSpacing:"0.05em",marginBottom:6}}>Envoyer à tous</div>
-          <div style={{fontSize:12,color:C.text3,marginBottom:20}}>{users.length} utilisateurs vont recevoir ce message</div>
-          <textarea value={broadcast} onChange={e=>setBroadcast(e.target.value)} placeholder="Votre message... (Markdown supporté : *gras*, _italique_)"
-            style={{width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,color:C.text1,fontSize:14,padding:"12px 14px",outline:"none",resize:"vertical",minHeight:120,fontFamily:"'DM Sans',sans-serif",boxSizing:"border-box"}}
-            onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:12}}>
-            <span style={{fontSize:12,color:C.text3}}>{broadcast.length} caractères</span>
-            <Btn onClick={sendBroadcast} disabled={broadcasting||!broadcast.trim()}>
-              {broadcasting?`⏳ Envoi en cours...`:`📢 Envoyer à ${users.length} utilisateurs`}
-            </Btn>
-          </div>
-        </Card>
-
-        {/* Historique broadcasts */}
-        <div style={{marginTop:20}}>
-          <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em",marginBottom:12,color:C.text2}}>
-            Historique broadcasts ({broadcastGroups().length})
-          </div>
-          {broadcastGroups().length===0&&<div style={{padding:20,textAlign:"center",color:C.text3,fontSize:13}}>Aucun broadcast envoyé</div>}
-          {broadcastGroups().map((g,i)=><div key={i} style={{padding:"14px 16px",background:C.card,border:`1px solid ${C.border}`,borderRadius:10,marginBottom:10}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:8}}>
-              <div style={{flex:1}}>
-                <div style={{fontSize:13,color:C.text1,lineHeight:1.5,whiteSpace:"pre-wrap"}}>{g.text}</div>
+    tab==="broadcast"?(
+      <div style={{flex:1,overflowY:"auto"}}>
+        <div style={{maxWidth:600}}>
+          <Card>
+            <div style={{fontFamily:"'Bebas Neue'",fontSize:20,letterSpacing:"0.05em",marginBottom:6}}>Envoyer à tous</div>
+            <div style={{fontSize:12,color:C.text3,marginBottom:14}}>{users.length} utilisateurs</div>
+            {broadcastFile&&<div style={{padding:"8px 12px",background:C.accentDim,border:`1px solid ${C.accentMid}`,borderRadius:8,marginBottom:10,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <span style={{fontSize:12,color:C.accent}}>📎 {broadcastFile.name}</span>
+              <button onClick={()=>{setBroadcastFile(null);broadcastFileRef.current.value="";}} style={{background:"none",border:"none",color:C.accent,cursor:"pointer",fontSize:16}}>×</button>
+            </div>}
+            <textarea value={broadcast} onChange={e=>setBroadcast(e.target.value)} placeholder="Votre message... (*gras*, _italique_)"
+              style={{width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,color:C.text1,fontSize:14,padding:"12px 14px",outline:"none",resize:"vertical",minHeight:100,fontFamily:"'DM Sans',sans-serif",boxSizing:"border-box"}}
+              onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:10,gap:10}}>
+              <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                <button onClick={()=>broadcastFileRef.current?.click()} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,color:C.text2,cursor:"pointer",padding:"7px 12px",fontSize:13}}>📎 Fichier</button>
+                <input ref={broadcastFileRef} type="file" accept="image/*,video/*,application/pdf,.doc,.docx" style={{display:"none"}} onChange={e=>setBroadcastFile(e.target.files[0]||null)}/>
               </div>
-              <button onClick={()=>deleteBroadcastGroup(g)}
-                style={{background:"none",border:`1px solid ${C.red}44`,borderRadius:6,color:C.red,cursor:"pointer",fontSize:11,padding:"4px 10px",flexShrink:0,fontFamily:"'DM Sans',sans-serif"}}>
-                🗑️ Supprimer
-              </button>
+              <Btn onClick={sendBroadcast} disabled={broadcasting||(!broadcast.trim()&&!broadcastFile)}>
+                {broadcasting?"⏳ Envoi...`":`📢 Envoyer à ${users.length}`}
+              </Btn>
             </div>
-            <div style={{display:"flex",alignItems:"center",gap:12}}>
-              <span style={{fontSize:11,color:C.text3}}>{new Date(g.created_at).toLocaleString("fr-FR")}</span>
-              <span style={{fontSize:11,background:C.accentDim,color:C.accent,border:`1px solid ${C.accentMid}`,borderRadius:4,padding:"1px 8px"}}>
-                📢 {g.msgs.length} destinataire{g.msgs.length>1?"s":""}
-              </span>
-              <span style={{fontSize:11,color:g.msgs.some(m=>m.tg_message_id)?C.green:C.orange}}>
-                {g.msgs.some(m=>m.tg_message_id)?"✓ Supprimable sur Telegram":"⚠ Sans ID Telegram"}
-              </span>
-            </div>
-          </div>)}
+          </Card>
+          <div style={{marginTop:20}}>
+            <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em",marginBottom:12,color:C.text2}}>Historique ({broadcastGroups().length})</div>
+            {broadcastGroups().length===0&&<div style={{padding:20,textAlign:"center",color:C.text3,fontSize:13}}>Aucun broadcast</div>}
+            {broadcastGroups().map((g,i)=><div key={i} style={{padding:"14px 16px",background:C.card,border:`1px solid ${C.border}`,borderRadius:10,marginBottom:10}}>
+              <div style={{display:"flex",justifyContent:"space-between",gap:12,marginBottom:8}}>
+                <div style={{fontSize:13,color:C.text1,lineHeight:1.5,whiteSpace:"pre-wrap",flex:1}}>{g.text}</div>
+                <button onClick={()=>deleteBroadcastGroup(g)} style={{background:"none",border:`1px solid ${C.red}44`,borderRadius:6,color:C.red,cursor:"pointer",fontSize:11,padding:"4px 10px",flexShrink:0}}>🗑️ Supprimer</button>
+              </div>
+              <div style={{display:"flex",gap:10}}>
+                <span style={{fontSize:11,color:C.text3}}>{new Date(g.created_at).toLocaleString("fr-FR")}</span>
+                <span style={{fontSize:11,background:C.accentDim,color:C.accent,border:`1px solid ${C.accentMid}`,borderRadius:4,padding:"1px 8px"}}>📢 {g.msgs.length} dest.</span>
+              </div>
+            </div>)}
+          </div>
         </div>
       </div>
-
-    ) : (
-      /* ── INBOX ── */
-      <div style={{display:"flex",gap:0,flex:1,minHeight:0,borderRadius:12,border:`1px solid ${C.border}`,overflow:"hidden"}}>
-
-        {/* Liste utilisateurs */}
+    ):(
+      <div style={{display:"flex",flex:1,minHeight:0,borderRadius:12,border:`1px solid ${C.border}`,overflow:"hidden"}}>
+        {/* Liste */}
         <div style={{width:280,flexShrink:0,background:C.surface,borderRight:`1px solid ${C.border}`,overflowY:"auto"}}>
           {users.length===0&&<div style={{padding:24,textAlign:"center",color:C.text3,fontSize:13}}>Aucun utilisateur</div>}
           {users.map(u=>{
-            const last = lastMsg(u);
-            const isSelected = selected?.id===u.id;
-            const unread = unreadForUser(u.id);
-            return <div key={u.id} onClick={()=>{ setSelected(u); const ids=messages.filter(m=>m.telegram_id===u.id&&m.direction==="in").map(m=>m.id); const merged=[...new Set([...JSON.parse(localStorage.getItem("zkpro_read_ids")||"[]"),...ids])].slice(-1000); localStorage.setItem("zkpro_read_ids",JSON.stringify(merged)); if(onRead)onRead(); }}
+            const last=lastMsg(u),isSelected=selected?.id===u.id,unread=unreadForUser(u.id);
+            return <div key={u.id} onClick={()=>{setSelected(u);markRead(u.id);}}
               style={{padding:"12px 16px",cursor:"pointer",borderBottom:`1px solid ${C.border}`,background:isSelected?C.accentDim:"transparent",borderLeft:isSelected?`3px solid ${C.accent}`:"3px solid transparent"}}
               onMouseEnter={e=>!isSelected&&(e.currentTarget.style.background="#ffffff06")}
               onMouseLeave={e=>!isSelected&&(e.currentTarget.style.background="transparent")}>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:3}}>
                 <span style={{fontSize:13,fontWeight:600,color:isSelected?C.accent:C.text1}}>{displayName(u)}</span>
-                {unread>0&&<span style={{background:C.red,color:"#fff",borderRadius:10,fontSize:10,fontWeight:700,padding:"1px 6px"}}>{unread}</span>}
+                {unread>0&&<span style={{background:C.red,color:"#fff",borderRadius:10,fontSize:10,fontWeight:700,padding:"1px 7px"}}>{unread}</span>}
               </div>
               {last&&<div style={{fontSize:11,color:C.text3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{last.direction==="out"?"✓ ":""}{last.text}</div>}
               <div style={{fontSize:10,color:C.text3,marginTop:2}}>{new Date(u.last_seen).toLocaleDateString("fr-FR")}</div>
@@ -864,14 +860,11 @@ function MessagesPage({onRead}){
         </div>
 
         {/* Conversation */}
-        <div style={{flex:1,display:"flex",flexDirection:"column",background:C.card}}>
-          {!selected ? (
-            <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",color:C.text3,fontSize:14}}>
-              ← Sélectionne une conversation
-            </div>
-          ) : <>
-            {/* Header conversation */}
-            <div style={{padding:"14px 18px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div style={{flex:1,display:"flex",flexDirection:"column",background:C.card,minHeight:0}}>
+          {!selected?(
+            <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",color:C.text3,fontSize:14}}>← Sélectionne une conversation</div>
+          ):<>
+            <div style={{padding:"12px 18px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
               <div>
                 <div style={{fontWeight:700,fontSize:15}}>{displayName(selected)}</div>
                 <div style={{fontSize:11,color:C.text3}}>ID: {selected.id} · Depuis {new Date(selected.started_at).toLocaleDateString("fr-FR")}</div>
@@ -879,28 +872,46 @@ function MessagesPage({onRead}){
               <button onClick={()=>setSelected(null)} style={{background:"none",border:"none",color:C.text3,cursor:"pointer",fontSize:18}}>×</button>
             </div>
 
-            {/* Messages */}
-            <div style={{flex:1,overflowY:"auto",padding:"16px 18px",display:"flex",flexDirection:"column",gap:8}}>
+            {/* Messages - scroll automatique */}
+            <div style={{flex:1,overflowY:"auto",padding:"16px 18px",display:"flex",flexDirection:"column",gap:8,minHeight:0}}>
+              {userMessages(selected.id).length===0&&<div style={{textAlign:"center",color:C.text3,fontSize:13,padding:24}}>Aucun message</div>}
               {userMessages(selected.id).map(m=>(
-                <div key={m.id} style={{display:"flex",justifyContent:m.direction==="out"?"flex-end":"flex-start",gap:8,alignItems:"flex-end"}}>
-                  <div style={{maxWidth:"75%",padding:"9px 13px",borderRadius:m.direction==="out"?"14px 14px 4px 14px":"14px 14px 14px 4px",background:m.direction==="out"?C.accent:C.surface,color:m.direction==="out"?C.bg:C.text1,fontSize:13,lineHeight:1.5,position:"relative"}}>
-                    {m.text}
-                    <div style={{fontSize:10,color:m.direction==="out"?"#00000066":C.text3,marginTop:4,textAlign:"right"}}>{new Date(m.created_at).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}</div>
+                <div key={m.id} style={{display:"flex",justifyContent:m.direction==="out"?"flex-end":"flex-start",gap:6,alignItems:"flex-end"}}>
+                  {m.direction==="in"&&<div style={{width:28,height:28,borderRadius:"50%",background:C.accentDim,border:`1px solid ${C.accentMid}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,flexShrink:0}}>👤</div>}
+                  <div style={{maxWidth:"72%"}}>
+                    <div style={{padding:"9px 13px",borderRadius:m.direction==="out"?"16px 16px 4px 16px":"16px 16px 16px 4px",background:m.direction==="out"?C.accent:C.surface,color:m.direction==="out"?C.bg:C.text1,fontSize:13,lineHeight:1.5,wordBreak:"break-word"}}>
+                      {m.text}
+                    </div>
+                    <div style={{fontSize:10,color:C.text3,marginTop:3,display:"flex",alignItems:"center",gap:6,justifyContent:m.direction==="out"?"flex-end":"flex-start"}}>
+                      {new Date(m.created_at).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}
+                      {m.direction==="out"&&<button onClick={()=>deleteMsg(m)} style={{background:"none",border:"none",color:C.text3,cursor:"pointer",fontSize:11,padding:0,opacity:.6}}>🗑</button>}
+                    </div>
                   </div>
-                  <button onClick={()=>deleteMsg(m)} style={{background:"none",border:"none",color:C.text3,cursor:"pointer",fontSize:13,opacity:.5,flexShrink:0}} title="Supprimer">🗑</button>
+                  {m.direction==="in"&&<button onClick={()=>deleteMsg(m)} style={{background:"none",border:"none",color:C.text3,cursor:"pointer",fontSize:11,opacity:.4}}>🗑</button>}
                 </div>
               ))}
-              {userMessages(selected.id).length===0&&<div style={{textAlign:"center",color:C.text3,fontSize:13,padding:24}}>Aucun message</div>}
+              <div ref={messagesEndRef}/>
             </div>
 
             {/* Zone réponse */}
-            <div style={{padding:"12px 16px",borderTop:`1px solid ${C.border}`,display:"flex",gap:10,alignItems:"flex-end"}}>
-              <textarea value={reply} onChange={e=>setReply(e.target.value)} placeholder="Répondre..." onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&(e.preventDefault(),sendReply())}
-                style={{flex:1,background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,color:C.text1,fontSize:13,padding:"10px 13px",outline:"none",resize:"none",maxHeight:100,fontFamily:"'DM Sans',sans-serif"}}
-                onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border} rows={1}/>
-              <Btn onClick={sendReply} disabled={sending||!reply.trim()} style={{padding:"10px 16px",flexShrink:0}}>
-                {sending?"...":"Envoyer ↑"}
-              </Btn>
+            <div style={{padding:"10px 14px",borderTop:`1px solid ${C.border}`,background:C.surface,flexShrink:0}}>
+              {replyFile&&<div style={{padding:"6px 10px",background:C.accentDim,borderRadius:8,marginBottom:8,fontSize:12,color:C.accent,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <span>📎 {replyFile.name}</span>
+                <button onClick={()=>{setReplyFile(null);fileRef.current.value="";}} style={{background:"none",border:"none",color:C.accent,cursor:"pointer",fontSize:14}}>×</button>
+              </div>}
+              <div style={{display:"flex",gap:8,alignItems:"flex-end"}}>
+                <button onClick={()=>fileRef.current?.click()} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,color:C.text2,cursor:"pointer",width:38,height:38,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>📎</button>
+                <input ref={fileRef} type="file" accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx" style={{display:"none"}} onChange={e=>setReplyFile(e.target.files[0]||null)}/>
+                <textarea value={reply} onChange={e=>setReply(e.target.value)}
+                  placeholder="Message... (Entrée = envoyer, Maj+Entrée = saut de ligne)"
+                  onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&(e.preventDefault(),sendReply())}
+                  style={{flex:1,background:C.card,border:`1px solid ${C.border}`,borderRadius:10,color:C.text1,fontSize:13,padding:"9px 13px",outline:"none",resize:"none",maxHeight:120,minHeight:38,fontFamily:"'DM Sans',sans-serif",lineHeight:1.5}}
+                  onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border} rows={1}/>
+                <button onClick={sendReply} disabled={sending||(!reply.trim()&&!replyFile)}
+                  style={{background:sending||(!reply.trim()&&!replyFile)?C.border:C.accent,border:"none",borderRadius:10,color:C.bg,cursor:"pointer",width:38,height:38,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>
+                  {sending?"⏳":"➤"}
+                </button>
+              </div>
             </div>
           </>}
         </div>
