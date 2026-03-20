@@ -622,6 +622,8 @@ const TG_API = `https://api.telegram.org/bot${BOT_TOKEN_DASH}`;
 async function sendTgMessage(chatId, text){
   const r = await fetch(`${TG_API}/sendMessage`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chat_id:chatId,text,parse_mode:"Markdown"})});
   if(!r.ok) throw new Error("Telegram error");
+  const data = await r.json();
+  return data?.result?.message_id || null;
 }
 
 function MessagesPage(){
@@ -655,10 +657,21 @@ function MessagesPage(){
 
   const userMessages = uid => messages.filter(m=>m.telegram_id===uid).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
 
-  const deleteMsg = async id => {
+  const deleteMsg = async msg => {
+    // Si message sortant avec tg_message_id → supprimer sur Telegram d'abord
+    if(msg.direction === "out" && msg.tg_message_id) {
+      try {
+        await fetch(`${TG_API}/deleteMessage`, {
+          method: "POST",
+          headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({ chat_id: msg.telegram_id, message_id: msg.tg_message_id })
+        });
+      } catch(e){ console.warn("Telegram delete failed:", e); }
+    }
+    // Supprimer dans Supabase
     try {
-      await fetch(`${SB_URL}/rest/v1/bot_messages?id=eq.${id}`,{method:"DELETE",headers:SBH});
-      setMessages(prev=>prev.filter(m=>m.id!==id));
+      await fetch(`${SB_URL}/rest/v1/bot_messages?id=eq.${msg.id}`,{method:"DELETE",headers:SBH});
+      setMessages(prev=>prev.filter(m=>m.id!==msg.id));
     } catch(e){ alert("Erreur: "+e.message); }
   };
 
@@ -666,9 +679,10 @@ function MessagesPage(){
     if(!reply.trim()||!selected) return;
     setSending(true);
     try {
-      await sendTgMessage(selected.id, reply);
-      await fetch(`${SB_URL}/rest/v1/bot_messages`,{method:"POST",headers:{...SBH,"Prefer":"return=minimal"},body:JSON.stringify({telegram_id:selected.id,direction:"out",text:reply})});
-      setMessages(prev=>[...prev,{id:Date.now(),telegram_id:selected.id,direction:"out",text:reply,created_at:new Date().toISOString()}]);
+      const tgMessageId = await sendTgMessage(selected.id, reply);
+      const newMsg = {id:Date.now(),telegram_id:selected.id,direction:"out",text:reply,tg_message_id:tgMessageId,created_at:new Date().toISOString()};
+      await fetch(`${SB_URL}/rest/v1/bot_messages`,{method:"POST",headers:{...SBH,"Prefer":"return=minimal"},body:JSON.stringify({telegram_id:selected.id,direction:"out",text:reply,tg_message_id:tgMessageId})});
+      setMessages(prev=>[...prev,newMsg]);
       setReply("");
       showToast("✅ Message envoyé !");
     } catch(e){ alert("Erreur: "+e.message); }
@@ -748,7 +762,7 @@ function MessagesPage(){
               <div style={{fontSize:13,color:C.text1,marginBottom:3}}>{m.text}</div>
               <div style={{fontSize:11,color:C.text3}}>{new Date(m.created_at).toLocaleString("fr-FR")} · à {m.telegram_id}</div>
             </div>
-            <button onClick={()=>deleteMsg(m.id)} style={{background:"none",border:"none",color:C.text3,cursor:"pointer",fontSize:16,flexShrink:0}} title="Supprimer">🗑️</button>
+            <button onClick={()=>deleteMsg(m)} style={{background:"none",border:"none",color:C.text3,cursor:"pointer",fontSize:16,flexShrink:0}} title="Supprimer">🗑️</button>
           </div>)}
         </div>
       </div>
@@ -801,7 +815,7 @@ function MessagesPage(){
                     {m.text}
                     <div style={{fontSize:10,color:m.direction==="out"?"#00000066":C.text3,marginTop:4,textAlign:"right"}}>{new Date(m.created_at).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}</div>
                   </div>
-                  <button onClick={()=>deleteMsg(m.id)} style={{background:"none",border:"none",color:C.text3,cursor:"pointer",fontSize:13,opacity:.5,flexShrink:0}} title="Supprimer">🗑</button>
+                  <button onClick={()=>deleteMsg(m)} style={{background:"none",border:"none",color:C.text3,cursor:"pointer",fontSize:13,opacity:.5,flexShrink:0}} title="Supprimer">🗑</button>
                 </div>
               ))}
               {userMessages(selected.id).length===0&&<div style={{textAlign:"center",color:C.text3,fontSize:13,padding:24}}>Aucun message</div>}
