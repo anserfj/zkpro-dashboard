@@ -641,6 +641,20 @@ function MessagesPage({onRead}){
 
   const showToast = msg => { setToast(msg); setTimeout(()=>setToast(""),2500); };
 
+  // ── Helpers (définis avant les useEffect) ──
+  const readIds      = () => JSON.parse(localStorage.getItem("zkpro_read_ids")||"[]");
+  const userMessages = uid => messages.filter(m=>m.telegram_id===uid).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+  const lastMsg      = u => { const msgs=messages.filter(m=>m.telegram_id===u.id); if(!msgs.length)return null; return msgs.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0]; };
+  const unreadForUser= uid => messages.filter(m=>m.telegram_id===uid&&m.direction==="in"&&!readIds().includes(m.id)).length;
+  const displayName  = u => u.username ? `@${u.username}` : `${u.first_name||""}${u.last_name?` ${u.last_name}`:""}`.trim() || `User ${u.id}`;
+
+  const markAllRead = (msgs) => {
+    const ids = msgs.filter(m=>m.direction==="in").map(m=>m.id);
+    const merged = [...new Set([...JSON.parse(localStorage.getItem("zkpro_read_ids")||"[]"), ...ids])].slice(-1000);
+    localStorage.setItem("zkpro_read_ids", JSON.stringify(merged));
+    if(onRead) onRead();
+  };
+
   const fetchData = async (silent=false) => {
     if(!silent) setLoading(true);
     try {
@@ -650,7 +664,7 @@ function MessagesPage({onRead}){
       ]);
       setUsers(u);
       setMessages(m);
-      markAllRead(m); // marquer tout comme lu dès qu'on est sur la page
+      if(!silent) markAllRead(m);
     } catch(e){ console.error(e); }
     if(!silent) setLoading(false);
   };
@@ -663,7 +677,16 @@ function MessagesPage({onRead}){
     return ()=>clearInterval(t);
   },[]);
 
-  const userMessages = uid => messages.filter(m=>m.telegram_id===uid).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+  // Marquer comme lus quand on change de conversation
+  useEffect(()=>{
+    if(!selected || messages.length===0) return;
+    const userIn = messages.filter(m=>m.telegram_id===selected.id&&m.direction==="in").map(m=>m.id);
+    if(userIn.length===0) return;
+    const merged = [...new Set([...JSON.parse(localStorage.getItem("zkpro_read_ids")||"[]"), ...userIn])].slice(-1000);
+    localStorage.setItem("zkpro_read_ids", JSON.stringify(merged));
+    if(onRead) onRead();
+  },[selected]);
+
 
   const deleteMsg = async msg => {
     // Si message sortant avec tg_message_id → supprimer sur Telegram d'abord
@@ -747,45 +770,6 @@ function MessagesPage({onRead}){
     showToast("🗑️ Broadcast supprimé");
   };
 
-  // Marquer tous les messages comme lus quand on ouvre la page
-  const markAllRead = (msgs) => {
-    const inMsgs = msgs.filter(m=>m.direction==="in");
-    const ids = inMsgs.map(m=>m.id);
-    const existing = JSON.parse(localStorage.getItem("zkpro_read_ids")||"[]");
-    const merged = [...new Set([...existing, ...ids])].slice(-1000); // garder max 1000
-    localStorage.setItem("zkpro_read_ids", JSON.stringify(merged));
-    if(onRead) onRead();
-  };
-
-  // Marquer les messages d'un user comme lus quand on ouvre la conversation
-  const markUserRead = (uid, msgs) => {
-    const userIn = msgs.filter(m=>m.telegram_id===uid&&m.direction==="in").map(m=>m.id);
-    const existing = JSON.parse(localStorage.getItem("zkpro_read_ids")||"[]");
-    const merged = [...new Set([...existing, ...userIn])].slice(-1000);
-    localStorage.setItem("zkpro_read_ids", JSON.stringify(merged));
-    if(onRead) onRead();
-  };
-
-  // Marquer comme lus quand on ouvre une conversation (seulement au changement de selected)
-  useEffect(()=>{
-    if(selected && messages.length > 0){
-      const userIn = messages.filter(m=>m.telegram_id===selected.id&&m.direction==="in").map(m=>m.id);
-      if(userIn.length === 0) return;
-      const existing = JSON.parse(localStorage.getItem("zkpro_read_ids")||"[]");
-      const merged = [...new Set([...existing, ...userIn])].slice(-1000);
-      localStorage.setItem("zkpro_read_ids", JSON.stringify(merged));
-      if(onRead) onRead();
-    }
-  },[selected]); // ← seulement quand selected change, pas messages
-
-  const readIds = () => JSON.parse(localStorage.getItem("zkpro_read_ids")||"[]");
-  const unreadForUser = (uid) => messages.filter(m=>m.telegram_id===uid&&m.direction==="in"&&!readIds().includes(m.id)).length;
-  const lastMsg = u => {
-    const msgs = messages.filter(m=>m.telegram_id===u.id);
-    if(!msgs.length) return null;
-    return msgs.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0];
-  };
-  const unread = u => messages.filter(m=>m.telegram_id===u.id&&m.direction==="in").length;
 
   return <div className="fade-in" style={{display:"flex",flexDirection:"column",gap:0,height:"calc(100vh - 64px)"}}>
     {toast&&<div style={{position:"fixed",bottom:24,right:24,background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 20px",fontSize:14,zIndex:999}}>{toast}</div>}
@@ -865,7 +849,7 @@ function MessagesPage({onRead}){
             const last = lastMsg(u);
             const isSelected = selected?.id===u.id;
             const unread = unreadForUser(u.id);
-            return <div key={u.id} onClick={()=>{ setSelected(u); markUserRead(u.id, messages); }}
+            return <div key={u.id} onClick={()=>{ setSelected(u); const ids=messages.filter(m=>m.telegram_id===u.id&&m.direction==="in").map(m=>m.id); const merged=[...new Set([...JSON.parse(localStorage.getItem("zkpro_read_ids")||"[]"),...ids])].slice(-1000); localStorage.setItem("zkpro_read_ids",JSON.stringify(merged)); if(onRead)onRead(); }}
               style={{padding:"12px 16px",cursor:"pointer",borderBottom:`1px solid ${C.border}`,background:isSelected?C.accentDim:"transparent",borderLeft:isSelected?`3px solid ${C.accent}`:"3px solid transparent"}}
               onMouseEnter={e=>!isSelected&&(e.currentTarget.style.background="#ffffff06")}
               onMouseLeave={e=>!isSelected&&(e.currentTarget.style.background="transparent")}>
