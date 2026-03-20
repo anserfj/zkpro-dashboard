@@ -640,8 +640,8 @@ function MessagesPage(){
 
   const showToast = msg => { setToast(msg); setTimeout(()=>setToast(""),2500); };
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (silent=false) => {
+    if(!silent) setLoading(true);
     try {
       const [u, m] = await Promise.all([
         sbGet("bot_users","?order=last_seen.desc"),
@@ -650,10 +650,16 @@ function MessagesPage(){
       setUsers(u);
       setMessages(m);
     } catch(e){ console.error(e); }
-    setLoading(false);
+    if(!silent) setLoading(false);
   };
 
   useEffect(()=>{ fetchData(); },[]);
+
+  // Auto-refresh silencieux toutes les 5 secondes
+  useEffect(()=>{
+    const t = setInterval(()=>fetchData(true), 5000);
+    return ()=>clearInterval(t);
+  },[]);
 
   const userMessages = uid => messages.filter(m=>m.telegram_id===uid).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
 
