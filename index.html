@@ -111,7 +111,7 @@ async function uploadFile(file, folder="photos") {
 }
 
 const C={bg:"#080a0e",surface:"#0f1318",card:"#141920",border:"#1e2530",accent:"#00e5ff",accentDim:"#00e5ff22",accentMid:"#00e5ff55",gold:"#f0b429",green:"#00e676",red:"#ff4757",orange:"#ff9f43",text1:"#eef2f7",text2:"#8b9ab0",text3:"#4a5568"};
-const STATUS={nouveau:{label:"Nouveau",color:C.accent,bg:C.accentDim},traité:{label:"Traité",color:C.gold,bg:"#f0b42922"},expédié:{label:"Expédié",color:C.green,bg:"#00e67622"},annulé:{label:"Annulé",color:C.red,bg:"#ff475722"}};
+const STATUS={nouveau:{label:"Nouveau",color:C.accent,bg:C.accentDim},payé:{label:"Payé",color:"#a78bfa",bg:"#a78bfa22"},traité:{label:"Traité",color:C.gold,bg:"#f0b42922"},expédié:{label:"Expédié",color:C.green,bg:"#00e67622"},annulé:{label:"Annulé",color:C.red,bg:"#ff475722"}};
 const fmt=n=>parseFloat(n||0).toFixed(2).replace(".",",")+"\u00a0€";
 const isVideo=url=>url&&/\.(mp4|webm|mov|avi)(\?|$)/i.test(url);
 
@@ -339,7 +339,7 @@ function LoginPage({onLogin}){
 
 /* ── SIDEBAR ── */
 function Sidebar({page,setPage,onLogout,newCount,unreadMsg}){
-  const nav=[{id:"dashboard",icon:"◈",label:"Dashboard"},{id:"orders",icon:"≡",label:"Commandes"},{id:"catalog",icon:"⊞",label:"Catalogue"},{id:"messages",icon:"✉",label:"Messages"},{id:"settings",icon:"⊙",label:"Paramètres"}];
+  const nav=[{id:"dashboard",icon:"◈",label:"Dashboard"},{id:"orders",icon:"≡",label:"Commandes"},{id:"clients",icon:"👥",label:"Clients"},{id:"catalog",icon:"⊞",label:"Catalogue"},{id:"messages",icon:"✉",label:"Messages"},{id:"settings",icon:"⊙",label:"Paramètres"}];
 
   // Barre de navigation mobile (bas d'écran)
   const MobileNav = ()=>(
@@ -478,7 +478,8 @@ function OrdersPage({orders,setOrders,loading,reload,selectedOrder,setSelectedOr
               <td style={{padding:"12px 16px",fontSize:13,fontWeight:600}}>{fmt(parseFloat(o.total)+parseFloat(o.livraison))}</td>
               <td style={{padding:"12px 16px"}}><Badge status={o.status}/></td>
               <td className="hide-mobile" style={{padding:"12px 16px"}}><div style={{display:"flex",gap:6}}>
-                {o.status==="nouveau"&&<Btn variant="gold" style={{padding:"4px 10px",fontSize:11}} disabled={updating} onClick={e=>{e.stopPropagation();updateStatus(o.id,"traité");}}>✓ Traiter</Btn>}
+                {o.status==="nouveau"&&<Btn variant="gold" style={{padding:"4px 10px",fontSize:11,background:"#a78bfa",color:"#000"}} disabled={updating} onClick={e=>{e.stopPropagation();updateStatus(o.id,"payé");}}>💜 Payé</Btn>}
+                {o.status==="payé"&&<Btn variant="gold" style={{padding:"4px 10px",fontSize:11}} disabled={updating} onClick={e=>{e.stopPropagation();updateStatus(o.id,"traité");}}>✓ Traiter</Btn>}
                 {o.status==="traité"&&<Btn style={{padding:"4px 10px",fontSize:11}} disabled={updating} onClick={e=>{e.stopPropagation();updateStatus(o.id,"expédié");}}>🚚 Expédier</Btn>}
               </div></td>
             </tr>)}</tbody>
@@ -744,7 +745,7 @@ async function sendTgFile(chatId, file){
   return data?.result?.message_id||null;
 }
 
-function MessagesPage({onRead, onGoToOrder}){
+function MessagesPage({onRead, onGoToOrder, orders=[], setOrders}){
   const [users,setUsers]=useState([]);
   const [messages,setMessages]=useState([]);
   const [selected,setSelected]=useState(null);
@@ -1035,13 +1036,57 @@ function MessagesPage({onRead, onGoToOrder}){
           {!selected?(
             <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",color:C.text3,fontSize:14}}>← Sélectionne une conversation</div>
           ):<>
-            <div style={{padding:"12px 18px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
-              <div>
-                <div style={{fontWeight:700,fontSize:15}}>{displayName(selected)}</div>
-                <div style={{fontSize:11,color:C.text3}}>ID: {selected.id} · Depuis {new Date(selected.started_at).toLocaleDateString("fr-FR")}</div>
-              </div>
-              <button onClick={()=>setSelected(null)} style={{background:"none",border:"none",color:C.text3,cursor:"pointer",fontSize:18}}>×</button>
-            </div>
+            {/* Header + commandes */}
+            {(()=>{
+              const clientOrders = orders.filter(o=>String(o.telegram_id)===String(selected.id));
+              const [showOrders, setShowOrders] = React.useState(false);
+              const [updatingO, setUpdatingO] = React.useState(false);
+              const updateOrderStatus = async(id,status)=>{
+                setUpdatingO(true);
+                try{ await sbPatch("orders",id,{status}); if(setOrders)setOrders(prev=>prev.map(o=>o.id===id?{...o,status}:o)); }catch(e){}
+                setUpdatingO(false);
+              };
+              return <>
+                <div style={{padding:"12px 18px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0,flexWrap:"wrap",gap:8}}>
+                  <div>
+                    <div style={{fontWeight:700,fontSize:15}}>{displayName(selected)}</div>
+                    <div style={{fontSize:11,color:C.text3}}>Depuis {new Date(selected.started_at).toLocaleDateString("fr-FR")}</div>
+                  </div>
+                  <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                    <button onClick={()=>setShowOrders(v=>!v)}
+                      style={{display:"flex",alignItems:"center",gap:5,padding:"5px 12px",background:showOrders?C.accentDim:"transparent",border:`1px solid ${showOrders?C.accentMid:C.border}`,borderRadius:8,color:showOrders?C.accent:C.text2,cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>
+                      🧾 {clientOrders.length} commande{clientOrders.length!==1?"s":""}
+                    </button>
+                    <button onClick={()=>setSelected(null)} style={{background:"none",border:"none",color:C.text3,cursor:"pointer",fontSize:18}}>×</button>
+                  </div>
+                </div>
+
+                {/* Panel commandes dépliable */}
+                {showOrders&&<div style={{borderBottom:`1px solid ${C.border}`,background:C.surface,padding:"12px 16px",maxHeight:260,overflowY:"auto",flexShrink:0}}>
+                  {clientOrders.length===0
+                    ? <div style={{textAlign:"center",color:C.text3,fontSize:12,padding:"8px 0"}}>Aucune commande</div>
+                    : clientOrders.map(o=><div key={o.id} style={{marginBottom:10,padding:"10px 12px",background:C.card,borderRadius:8,border:`1px solid ${C.border}`}}>
+                        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+                          <span style={{fontFamily:"'JetBrains Mono'",fontSize:11,color:C.accent}}>{o.id}</span>
+                          <span style={{fontSize:11,color:C.text3}}>{(parseFloat(o.total)+parseFloat(o.livraison||0)).toFixed(2).replace(".",",")} €</span>
+                        </div>
+                        <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                          {Object.entries(STATUS).map(([key,cfg])=>(
+                            <button key={key} onClick={()=>updateOrderStatus(o.id,key)} disabled={updatingO||o.status===key}
+                              style={{padding:"2px 8px",borderRadius:5,fontSize:10,fontWeight:600,cursor:o.status===key?"default":"pointer",
+                                border:`1px solid ${o.status===key?cfg.color:C.border}`,
+                                background:o.status===key?cfg.bg:"transparent",
+                                color:o.status===key?cfg.color:C.text3,
+                                fontFamily:"'DM Sans',sans-serif"}}>
+                              {cfg.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>)
+                  }
+                </div>}
+              </>;
+            })()}
 
             {/* Messages - scroll automatique */}
             <div ref={messagesContainerRef} style={{flex:1,overflowY:"auto",padding:"16px 18px",display:"flex",flexDirection:"column",gap:8,minHeight:0}}>
@@ -1089,6 +1134,118 @@ function MessagesPage({onRead, onGoToOrder}){
   </div>;
 }
 
+/* ── CLIENTS PAGE ── */
+function ClientsPage({orders,setOrders}){
+  const [clients,setClients]=useState([]);
+  const [selected,setSelected]=useState(null);
+  const [search,setSearch]=useState("");
+  const [loading,setLoading]=useState(false);
+  const [updating,setUpdating]=useState(false);
+
+  useEffect(()=>{
+    setLoading(true);
+    sbGet("bot_users","?order=last_seen.desc")
+      .then(u=>setClients(u))
+      .catch(console.error)
+      .finally(()=>setLoading(false));
+  },[]);
+
+  const clientOrders = uid => orders.filter(o=>String(o.telegram_id)===String(uid));
+  const displayName  = u => u.username?`@${u.username}`:`${u.first_name||""}${u.last_name?` ${u.last_name}`:""}`.trim()||`User ${u.id}`;
+  const totalCA      = uid => clientOrders(uid).filter(o=>o.status!=="annulé").reduce((s,o)=>s+parseFloat(o.total)+parseFloat(o.livraison||0),0);
+
+  const updateStatus=async(id,status)=>{
+    setUpdating(true);
+    try{
+      await sbPatch("orders",id,{status});
+      setOrders(prev=>prev.map(o=>o.id===id?{...o,status}:o));
+    }catch(e){alert(e.message);}
+    setUpdating(false);
+  };
+
+  const filtered = clients.filter(c=>!search||displayName(c).toLowerCase().includes(search.toLowerCase()));
+
+  return <div className="fade-in" style={{display:"flex",flexDirection:"column",gap:20}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+      <div>
+        <div className="page-title" style={{fontFamily:"'Bebas Neue'",fontSize:36,letterSpacing:"0.05em"}}>Clients</div>
+        <div style={{fontSize:12,color:C.text3,marginTop:2}}>{clients.length} clients enregistrés</div>
+      </div>
+    </div>
+
+    <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher un client..."
+      style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:13,padding:"9px 14px",outline:"none",maxWidth:300}}
+      onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+
+    {loading?<div style={{padding:40,display:"flex",justifyContent:"center"}}><div className="spinner"/></div>:
+    <div style={{display:"flex",gap:16,flexWrap:"wrap"}}>
+      {/* Liste clients */}
+      <div style={{flex:1,minWidth:260}}>
+        {filtered.map(c=>{
+          const nbOrders=clientOrders(c.id).length;
+          const ca=totalCA(c.id);
+          const isSelected=selected?.id===c.id;
+          return <div key={c.id} onClick={()=>setSelected(isSelected?null:c)}
+            style={{padding:"14px 16px",background:isSelected?C.accentDim:C.card,border:`1px solid ${isSelected?C.accentMid:C.border}`,borderRadius:10,marginBottom:8,cursor:"pointer",transition:"all .15s"}}
+            onMouseEnter={e=>!isSelected&&(e.currentTarget.style.borderColor=C.accentMid)}
+            onMouseLeave={e=>!isSelected&&(e.currentTarget.style.borderColor=C.border)}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <div style={{width:36,height:36,borderRadius:10,background:C.accentDim,border:`1px solid ${C.accentMid}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>👤</div>
+                <div>
+                  <div style={{fontSize:13,fontWeight:700,color:isSelected?C.accent:C.text1}}>{displayName(c)}</div>
+                  <div style={{fontSize:11,color:C.text3}}>Depuis {new Date(c.started_at).toLocaleDateString("fr-FR")}</div>
+                </div>
+              </div>
+              <div style={{textAlign:"right"}}>
+                <div style={{fontSize:12,fontWeight:700,color:C.accent}}>{ca>0?`${ca.toFixed(2).replace(".",",")} €`:"-"}</div>
+                <div style={{fontSize:11,color:C.text3}}>{nbOrders} commande{nbOrders>1?"s":""}</div>
+              </div>
+            </div>
+            {c.username&&<div style={{display:"flex",gap:6}}>
+              <a href={`https://t.me/${c.username}`} target="_blank" style={{fontSize:10,color:C.accent,textDecoration:"none",background:C.accentDim,border:`1px solid ${C.accentMid}`,borderRadius:4,padding:"2px 8px"}} onClick={e=>e.stopPropagation()}>🔗 Profil</a>
+              <a href={`https://t.me/zkprobo_bot?start=user_${c.id}`} target="_blank" style={{fontSize:10,color:C.green,textDecoration:"none",background:"#00e67615",border:"1px solid #00e67633",borderRadius:4,padding:"2px 8px"}} onClick={e=>e.stopPropagation()}>💬 Contacter</a>
+            </div>}
+          </div>;
+        })}
+        {filtered.length===0&&<div style={{padding:40,textAlign:"center",color:C.text3,fontSize:13}}>Aucun client trouvé</div>}
+      </div>
+
+      {/* Historique commandes du client sélectionné */}
+      {selected&&<div className="scale-in" style={{width:"100%",maxWidth:400,flexShrink:0}}>
+        <Card style={{padding:20}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+            <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em"}}>Commandes — {displayName(selected)}</div>
+            <button onClick={()=>setSelected(null)} style={{background:"none",border:"none",color:C.text3,cursor:"pointer",fontSize:18}}>×</button>
+          </div>
+          {clientOrders(selected.id).length===0
+            ? <div style={{textAlign:"center",padding:24,color:C.text3,fontSize:13}}>Aucune commande</div>
+            : clientOrders(selected.id).map(o=><div key={o.id} style={{marginBottom:12,padding:"12px 14px",background:C.surface,borderRadius:10,border:`1px solid ${C.border}`}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+                  <span style={{fontFamily:"'JetBrains Mono'",fontSize:12,color:C.accent}}>{o.id}</span>
+                  <Badge status={o.status}/>
+                </div>
+                <div style={{fontSize:12,color:C.text2,marginBottom:8}}>{new Date(o.created_at).toLocaleDateString("fr-FR")} · <strong style={{color:C.text1}}>{(parseFloat(o.total)+parseFloat(o.livraison||0)).toFixed(2).replace(".",",")} €</strong></div>
+                <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+                  {Object.entries(STATUS).map(([key,cfg])=>(
+                    <button key={key} onClick={()=>updateStatus(o.id,key)} disabled={updating||o.status===key}
+                      style={{padding:"3px 9px",borderRadius:6,fontSize:10,fontWeight:600,cursor:o.status===key?"default":"pointer",
+                        border:`1px solid ${o.status===key?cfg.color:C.border}`,
+                        background:o.status===key?cfg.bg:"transparent",
+                        color:o.status===key?cfg.color:C.text3,
+                        fontFamily:"'DM Sans',sans-serif",opacity:updating?0.5:1}}>
+                      {cfg.label}
+                    </button>
+                  ))}
+                </div>
+              </div>)
+          }
+        </Card>
+      </div>}
+    </div>}
+  </div>;
+}
+
 /* ── APP ── */
 function App(){
   const [logged,setLogged]=useState(()=>localStorage.getItem("zkpro_logged")==="1");
@@ -1127,8 +1284,9 @@ function App(){
     <main className="main-content" style={{flex:1,padding:"32px 28px"}}>
       {page==="dashboard"&&<DashboardPage orders={orders} setPage={setPage} loading={loadO}/>}
       {page==="orders"&&<OrdersPage orders={orders} setOrders={setOrders} loading={loadO} reload={fetchOrders} selectedOrder={selectedOrder} setSelectedOrder={setSelectedOrder}/>}
+      {page==="clients"&&<ClientsPage orders={orders} setOrders={setOrders}/>}
       {page==="catalog"&&<CatalogPage products={products} setProducts={setProducts} loading={loadP} reload={fetchProducts}/>}
-      {page==="messages"&&<MessagesPage onRead={()=>{setUnreadMsgCount(0);pollUnread();}} onGoToOrder={orderId=>{setSelectedOrder(orderId);setPage("orders");fetchOrders();}}/>}
+      {page==="messages"&&<MessagesPage onRead={()=>{setUnreadMsgCount(0);pollUnread();}} onGoToOrder={orderId=>{setSelectedOrder(orderId);setPage("orders");fetchOrders();}} orders={orders} setOrders={setOrders}/>}
       {page==="settings"&&<div className="fade-in" style={{maxWidth:680}}>
         <div className="page-title" style={{fontFamily:"'Bebas Neue'",fontSize:36,letterSpacing:"0.05em",marginBottom:24}}>Paramètres</div>
         <Card>
