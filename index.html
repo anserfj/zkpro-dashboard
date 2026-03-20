@@ -766,12 +766,17 @@ function MessagesPage({onRead}){
     if(onRead) onRead();
   };
 
-  // Marquer comme lus automatiquement quand une conversation est ouverte
+  // Marquer comme lus quand on ouvre une conversation (seulement au changement de selected)
   useEffect(()=>{
     if(selected && messages.length > 0){
-      markUserRead(selected.id, messages);
+      const userIn = messages.filter(m=>m.telegram_id===selected.id&&m.direction==="in").map(m=>m.id);
+      if(userIn.length === 0) return;
+      const existing = JSON.parse(localStorage.getItem("zkpro_read_ids")||"[]");
+      const merged = [...new Set([...existing, ...userIn])].slice(-1000);
+      localStorage.setItem("zkpro_read_ids", JSON.stringify(merged));
+      if(onRead) onRead();
     }
-  },[selected, messages]);
+  },[selected]); // ← seulement quand selected change, pas messages
 
   const readIds = () => JSON.parse(localStorage.getItem("zkpro_read_ids")||"[]");
   const unreadForUser = (uid) => messages.filter(m=>m.telegram_id===uid&&m.direction==="in"&&!readIds().includes(m.id)).length;
