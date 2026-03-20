@@ -358,8 +358,17 @@ function DashboardPage({orders,setPage,loading}){
 }
 
 /* ── ORDERS ── */
-function OrdersPage({orders,setOrders,loading,reload}){
-  const [filter,setFilter]=useState("tous"),[selected,setSelected]=useState(null),[search,setSearch]=useState(""),[updating,setUpdating]=useState(false);
+function OrdersPage({orders,setOrders,loading,reload,selectedOrder,setSelectedOrder}){
+  const [filter,setFilter]=useState("tous"),[search,setSearch]=useState(""),[updating,setUpdating]=useState(false);
+  const [selected,setSelected]=useState(null);
+
+  // Auto-sélectionner la commande si on vient depuis Messages
+  useEffect(()=>{
+    if(selectedOrder && orders.length>0){
+      const o=orders.find(x=>x.id===selectedOrder);
+      if(o){setSelected(o);if(setSelectedOrder)setSelectedOrder(null);}
+    }
+  },[selectedOrder,orders]);
   const filtered=orders.filter(o=>(filter==="tous"||o.status===filter)&&(!search||o.id.toLowerCase().includes(search.toLowerCase())||o.telegram_user.toLowerCase().includes(search.toLowerCase())));
   const updateStatus=async(id,status)=>{setUpdating(true);try{await sbPatch("orders",id,{status});setOrders(prev=>prev.map(o=>o.id===id?{...o,status}:o));setSelected(prev=>prev?.id===id?{...prev,status}:prev);}catch(e){alert(e.message);}setUpdating(false);};
   const parseItems=items=>{try{return Array.isArray(items)?items:JSON.parse(items||"[]");}catch{return[];}};
@@ -653,7 +662,7 @@ async function sendTgFile(chatId, file){
   return data?.result?.message_id||null;
 }
 
-function MessagesPage({onRead}){
+function MessagesPage({onRead, onGoToOrder}){
   const [users,setUsers]=useState([]);
   const [messages,setMessages]=useState([]);
   const [selected,setSelected]=useState(null);
@@ -676,6 +685,43 @@ function MessagesPage({onRead}){
   const lastMsg=u=>{const ms=messages.filter(m=>m.telegram_id===u.id);if(!ms.length)return null;return ms.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0];};
   const unreadForUser=uid=>messages.filter(m=>m.telegram_id===uid&&m.direction==="in"&&!readIds().includes(m.id)).length;
   const displayName=u=>u.username?`@${u.username}`:`${u.first_name||""}${u.last_name?` ${u.last_name}`:""}`.trim()||`User ${u.id}`;
+
+  // Trier les users par date du dernier message (plus récent en haut)
+  const sortedUsers = [...users].sort((a,b)=>{
+    const la=lastMsg(a), lb=lastMsg(b);
+    if(!la&&!lb) return 0;
+    if(!la) return 1;
+    if(!lb) return -1;
+    return new Date(lb.created_at)-new Date(la.created_at);
+  });
+
+  // Extraire l'ID de commande d'un message récap
+  const getOrderId = text => {
+    const m = text?.match(/CMD-\d+/);
+    return m ? m[0] : null;
+  };
+
+  // Rendu d'un message — carte cliquable si c'est un récap commande
+  const renderMessage = m => {
+    const orderId = getOrderId(m.text);
+    const isOrderCard = m.direction==="out" && orderId && m.text?.includes("Récap commande");
+    if(isOrderCard){
+      return <div onClick={()=>onGoToOrder&&onGoToOrder(orderId)}
+        style={{padding:"10px 14px",background:C.bg,border:`1.5px solid ${C.accentMid}`,borderRadius:12,cursor:"pointer",transition:"all .15s"}}
+        onMouseEnter={e=>e.currentTarget.style.borderColor=C.accent}
+        onMouseLeave={e=>e.currentTarget.style.borderColor=C.accentMid}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+          <span style={{fontSize:16}}>🧾</span>
+          <span style={{fontSize:12,fontWeight:700,color:C.accent}}>{orderId}</span>
+        </div>
+        <div style={{fontSize:11,color:C.text2}}>Récap commande envoyé</div>
+        <div style={{fontSize:10,color:C.accent,marginTop:4,fontWeight:600}}>Voir la commande →</div>
+      </div>;
+    }
+    return <div style={{padding:"9px 13px",borderRadius:m.direction==="out"?"16px 16px 4px 16px":"16px 16px 16px 4px",background:m.direction==="out"?C.accent:C.surface,color:m.direction==="out"?C.bg:C.text1,fontSize:13,lineHeight:1.5,wordBreak:"break-word"}}>
+      {m.text}
+    </div>;
+  };
 
   const markRead=(uid,msgs)=>{
     const ids=(msgs||messages).filter(m=>m.telegram_id===uid&&m.direction==="in").map(m=>m.id);
@@ -761,7 +807,10 @@ function MessagesPage({onRead}){
       }
       const newMsg={id:Date.now(),telegram_id:selected.id,direction:"out",text:displayText,tg_message_id:tgMsgId,created_at:new Date().toISOString()};
       await fetch(`${SB_URL}/rest/v1/bot_messages`,{method:"POST",headers:{...SBH,"Prefer":"return=minimal"},body:JSON.stringify({telegram_id:selected.id,direction:"out",text:displayText,tg_message_id:tgMsgId})});
+      // Remonter l'utilisateur en haut de la liste
+      await fetch(`${SB_URL}/rest/v1/bot_users?id=eq.${selected.id}`,{method:"PATCH",headers:{...SBH,"Prefer":"return=minimal"},body:JSON.stringify({last_seen:new Date().toISOString()})});
       setMessages(prev=>[...prev,newMsg]);
+      setUsers(prev=>prev.map(u=>u.id===selected.id?{...u,last_seen:new Date().toISOString()}:u));
       setReply(""); setReplyFile(null); if(fileRef.current)fileRef.current.value="";
       showToast("✅ Envoyé !");
     }catch(e){alert("Erreur: "+e.message);}
@@ -871,7 +920,7 @@ function MessagesPage({onRead}){
         {/* Liste */}
         <div style={{width:280,flexShrink:0,background:C.surface,borderRight:`1px solid ${C.border}`,overflowY:"auto"}}>
           {users.length===0&&<div style={{padding:24,textAlign:"center",color:C.text3,fontSize:13}}>Aucun utilisateur</div>}
-          {users.map(u=>{
+          {sortedUsers.map(u=>{
             const last=lastMsg(u),isSelected=selected?.id===u.id,unread=unreadForUser(u.id);
             return <div key={u.id} onClick={()=>{setSelected(u);markRead(u.id);}}
               style={{padding:"12px 16px",cursor:"pointer",borderBottom:`1px solid ${C.border}`,background:isSelected?C.accentDim:"transparent",borderLeft:isSelected?`3px solid ${C.accent}`:"3px solid transparent"}}
@@ -907,9 +956,7 @@ function MessagesPage({onRead}){
                 <div key={m.id} data-msgid={m.id} data-direction={m.direction} style={{display:"flex",justifyContent:m.direction==="out"?"flex-end":"flex-start",gap:6,alignItems:"flex-end"}}>
                   {m.direction==="in"&&<div style={{width:28,height:28,borderRadius:"50%",background:C.accentDim,border:`1px solid ${C.accentMid}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,flexShrink:0}}>👤</div>}
                   <div style={{maxWidth:"72%"}}>
-                    <div style={{padding:"9px 13px",borderRadius:m.direction==="out"?"16px 16px 4px 16px":"16px 16px 16px 4px",background:m.direction==="out"?C.accent:C.surface,color:m.direction==="out"?C.bg:C.text1,fontSize:13,lineHeight:1.5,wordBreak:"break-word"}}>
-                      {m.text}
-                    </div>
+                    {renderMessage(m)}
                     <div style={{fontSize:10,color:C.text3,marginTop:3,display:"flex",alignItems:"center",gap:6,justifyContent:m.direction==="out"?"flex-end":"flex-start"}}>
                       {new Date(m.created_at).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}
                       {m.direction==="out"&&<button onClick={()=>deleteMsg(m)} style={{background:"none",border:"none",color:C.text3,cursor:"pointer",fontSize:11,padding:0,opacity:.6}}>🗑</button>}
@@ -953,6 +1000,7 @@ function App(){
   const [logged,setLogged]=useState(false);
   const [page,setPage]=useState("dashboard");
   const [orders,setOrders]=useState([]);
+  const [selectedOrder,setSelectedOrder]=useState(null);
   const [products,setProducts]=useState([]);
   const [loadO,setLoadO]=useState(false);
   const [loadP,setLoadP]=useState(false);
@@ -981,9 +1029,9 @@ function App(){
     <Sidebar page={page} setPage={setPage} onLogout={()=>setLogged(false)} newCount={newCount} unreadMsg={unreadMsgCount}/>
     <main style={{marginLeft:220,flex:1,padding:"32px 28px",maxWidth:"calc(100vw - 220px)"}}>
       {page==="dashboard"&&<DashboardPage orders={orders} setPage={setPage} loading={loadO}/>}
-      {page==="orders"&&<OrdersPage orders={orders} setOrders={setOrders} loading={loadO} reload={fetchOrders}/>}
+      {page==="orders"&&<OrdersPage orders={orders} setOrders={setOrders} loading={loadO} reload={fetchOrders} selectedOrder={selectedOrder} setSelectedOrder={setSelectedOrder}/>}
       {page==="catalog"&&<CatalogPage products={products} setProducts={setProducts} loading={loadP} reload={fetchProducts}/>}
-      {page==="messages"&&<MessagesPage onRead={()=>{setUnreadMsgCount(0);pollUnread();}}/>}
+      {page==="messages"&&<MessagesPage onRead={()=>{setUnreadMsgCount(0);pollUnread();}} onGoToOrder={orderId=>{setSelectedOrder(orderId);setPage("orders");fetchOrders();}}/>}
       {page==="settings"&&<div className="fade-in" style={{maxWidth:680}}>
         <div style={{fontFamily:"'Bebas Neue'",fontSize:36,letterSpacing:"0.05em",marginBottom:24}}>Paramètres</div>
         <Card>
