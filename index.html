@@ -36,7 +36,15 @@
     .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
     .hide-mobile{display:table-cell}
     .catalog-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
-    @media(max-width:900px){.stats-grid{grid-template-columns:repeat(2,1fr)!important}}
+    .dash-grid-2{display:grid;grid-template-columns:1.8fr 1fr;gap:16px}
+    .dash-grid-equal{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    .inbox-wrap{display:flex;flex:1;min-height:0;border-radius:12px;overflow:hidden}
+    .inbox-users{width:270px;flex-shrink:0;overflow-y:auto}
+    @media(max-width:900px){
+      .stats-grid{grid-template-columns:repeat(2,1fr)!important}
+      .dash-grid-2{grid-template-columns:1fr!important}
+      .dash-grid-equal{grid-template-columns:1fr!important}
+    }
     @media(max-width:640px){
       .sidebar-desktop{display:none!important}
       .sidebar-mobile{display:flex!important;position:fixed;bottom:0;left:0;right:0;height:60px;background:#0c0f14;border-top:1px solid #1e2530;z-index:200;align-items:stretch;padding-bottom:env(safe-area-inset-bottom)}
@@ -44,6 +52,10 @@
       .stats-grid{grid-template-columns:repeat(2,1fr)!important;gap:8px!important}
       .hide-mobile{display:none!important}
       .catalog-grid{grid-template-columns:repeat(2,1fr)!important;gap:8px!important}
+      .dash-grid-2{grid-template-columns:1fr!important}
+      .dash-grid-equal{grid-template-columns:1fr!important}
+      .inbox-wrap{flex-direction:column!important}
+      .inbox-users{width:100%!important;max-height:180px!important;border-right:none!important;border-bottom:1px solid #1e2530!important}
     }
   </style>
 </head>
@@ -205,10 +217,10 @@ function GoutsEditor({gouts,onChange}){
 
 /* ── LOGIN ── */
 function LoginPage({onLogin}){
-  const [email,setEmail]=useState(""),pass_=[useState(""),useState("")];
-  const [pass,setPass]=[pass_[0][0],pass_[0][1]];
-  const [err,setErr]=useState(""),loading=useState(false);
-  const [isLoading,setLoading]=loading;
+  const [email,setEmail]=useState("");
+  const [pass,setPass]=useState("");
+  const [err,setErr]=useState("");
+  const [isLoading,setLoading]=useState(false);
   const handle=e=>{e.preventDefault();setLoading(true);setErr("");setTimeout(()=>{if(email==="admin@zkpro.fr"&&pass==="zkpro2025")onLogin();else{setErr("Email ou mot de passe incorrect.");setLoading(false);}},600)};
   return<div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:C.bg,position:"relative",overflow:"hidden"}}>
     <div style={{position:"absolute",inset:0,opacity:.03,backgroundImage:`linear-gradient(${C.accent} 1px,transparent 1px),linear-gradient(90deg,${C.accent} 1px,transparent 1px)`,backgroundSize:"40px 40px"}}/>
@@ -350,7 +362,7 @@ function DashboardPage({orders,products,setPage}){
       </div>}
     </div>}
 
-    <div style={{display:"grid",gridTemplateColumns:"1.8fr 1fr",gap:16,flexWrap:"wrap"}}>
+    <div className="dash-grid-2" style={{gap:16}}>
       {/* CA 14 jours */}
       <Card>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
@@ -377,7 +389,7 @@ function DashboardPage({orders,products,setPage}){
       </Card>
     </div>
 
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,flexWrap:"wrap"}}>
+    <div className="dash-grid-equal" style={{gap:16}}>
       {/* Top produits */}
       <Card>
         <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em",marginBottom:14}}>🏆 Top produits</div>
@@ -416,7 +428,7 @@ function DashboardPage({orders,products,setPage}){
 
 
 /* ── ORDERS ── */
-function OrdersPage({orders,setOrders,loading,reload,selectedOrder,setSelectedOrder}){
+function OrdersPage({orders,setOrders,products,setProducts,loading,reload,selectedOrder,setSelectedOrder}){
   const [filter,setFilter]=useState("tous");
   const [search,setSearch]=useState("");
   const [sort,setSort]=useState("date_desc");
@@ -456,6 +468,7 @@ function OrdersPage({orders,setOrders,loading,reload,selectedOrder,setSelectedOr
           if(prod[0]){
             const newStock=Math.max(0,prod[0].stock-item.qty);
             await sbPatch("products",prod[0].id,{stock:newStock}).catch(()=>{});
+            if(setProducts)setProducts(prev=>prev.map(p=>p.id===prod[0].id?{...p,stock:newStock}:p));
           }
         }
       }
@@ -464,7 +477,9 @@ function OrdersPage({orders,setOrders,loading,reload,selectedOrder,setSelectedOr
         for(const item of items){
           const prod=await sbGet("products",`?name=eq.${encodeURIComponent(item.name)}&select=id,stock`).catch(()=>[]);
           if(prod[0]){
-            await sbPatch("products",prod[0].id,{stock:prod[0].stock+item.qty}).catch(()=>{});
+            const newStock=prod[0].stock+item.qty;
+            await sbPatch("products",prod[0].id,{stock:newStock}).catch(()=>{});
+            if(setProducts)setProducts(prev=>prev.map(p=>p.id===prod[0].id?{...p,stock:newStock}:p));
           }
         }
       }
@@ -549,7 +564,7 @@ function OrdersPage({orders,setOrders,loading,reload,selectedOrder,setSelectedOr
       </select>
     </div>
     <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-      {["tous","nouveau","payé","traité","expédié","annulé"].map(s=><button key={s} onClick={()=>setFilter(s)} style={{padding:"5px 12px",borderRadius:6,fontSize:12,fontWeight:600,cursor:"pointer",textTransform:"capitalize",background:filter===s?C.accent:"transparent",color:filter===s?C.bg:C.text2,border:`1px solid ${filter===s?C.accent:C.border}`,fontFamily:"'DM Sans',sans-serif"}}>{s}</button>)}
+      {["tous","nouveau","payé","traité","expédié","annulé"].map(s=><button key={s} onClick={()=>{setFilter(s);setCurrentPage(1)}} style={{padding:"5px 12px",borderRadius:6,fontSize:12,fontWeight:600,cursor:"pointer",textTransform:"capitalize",background:filter===s?C.accent:"transparent",color:filter===s?C.bg:C.text2,border:`1px solid ${filter===s?C.accent:C.border}`,fontFamily:"'DM Sans',sans-serif"}}>{s}</button>)}
       <span style={{marginLeft:"auto",fontSize:12,color:C.text3}}>{filtered.length} · {fmt(totalFiltered)}</span>
     </div>
 
@@ -682,7 +697,25 @@ function ClientsPage({orders,setOrders}){
   const clientOrders=uid=>orders.filter(o=>String(o.telegram_id)===String(uid));
   const ca=uid=>clientOrders(uid).filter(o=>o.status!=="annulé").reduce((s,o)=>s+parseFloat(o.total)+parseFloat(o.livraison||0),0);
 
-  const updateStatus=async(id,status)=>{setUpdating(true);try{await sbPatch("orders",id,{status});setOrders(prev=>prev.map(o=>o.id===id?{...o,status}:o))}catch(e){alert(e.message)}setUpdating(false)};
+  const updateStatus=async(id,status)=>{
+    setUpdating(true);
+    try{
+      const order=orders.find(o=>o.id===id);
+      await sbPatch("orders",id,{status});
+      setOrders(prev=>prev.map(o=>o.id===id?{...o,status}:o));
+      if(order){
+        const prevStatus=order.status;
+        const items=parseItems(order.items);
+        if(status==="payé"&&(prevStatus==="nouveau"||prevStatus==="annulé")){
+          for(const item of items){const prod=await sbGet("products",`?name=eq.${encodeURIComponent(item.name)}&select=id,stock`).catch(()=>[]);if(prod[0])await sbPatch("products",prod[0].id,{stock:Math.max(0,prod[0].stock-item.qty)}).catch(()=>{})}
+        }
+        if(status==="annulé"&&prevStatus!=="nouveau"&&prevStatus!=="annulé"){
+          for(const item of items){const prod=await sbGet("products",`?name=eq.${encodeURIComponent(item.name)}&select=id,stock`).catch(()=>[]);if(prod[0])await sbPatch("products",prod[0].id,{stock:prod[0].stock+item.qty}).catch(()=>{})}
+        }
+      }
+    }catch(e){alert(e.message)}
+    setUpdating(false);
+  };
 
   const sorted=useMemo(()=>{
     let r=[...clients].filter(c=>!search||dn(c).toLowerCase().includes(search.toLowerCase()));
@@ -1152,7 +1185,25 @@ function MessagesPage({onRead,onGoToOrder,orders=[],setOrders}){
   };
 
   const clientOrders=selected?orders.filter(o=>String(o.telegram_id)===String(selected.id)):[];
-  const updateOrderStatus=async(id,status)=>{setUpdatingO(true);try{await sbPatch("orders",id,{status});if(setOrders)setOrders(prev=>prev.map(o=>o.id===id?{...o,status}:o))}catch(e){}setUpdatingO(false)};
+  const updateOrderStatus=async(id,status)=>{
+    setUpdatingO(true);
+    try{
+      const order=orders.find(o=>o.id===id);
+      await sbPatch("orders",id,{status});
+      if(setOrders)setOrders(prev=>prev.map(o=>o.id===id?{...o,status}:o));
+      if(order){
+        const prevStatus=order.status;
+        const items=parseItems(order.items);
+        if(status==="payé"&&(prevStatus==="nouveau"||prevStatus==="annulé")){
+          for(const item of items){const prod=await sbGet("products",`?name=eq.${encodeURIComponent(item.name)}&select=id,stock`).catch(()=>[]);if(prod[0])await sbPatch("products",prod[0].id,{stock:Math.max(0,prod[0].stock-item.qty)}).catch(()=>{})}
+        }
+        if(status==="annulé"&&prevStatus!=="nouveau"&&prevStatus!=="annulé"){
+          for(const item of items){const prod=await sbGet("products",`?name=eq.${encodeURIComponent(item.name)}&select=id,stock`).catch(()=>[]);if(prod[0])await sbPatch("products",prod[0].id,{stock:prod[0].stock+item.qty}).catch(()=>{})}
+        }
+      }
+    }catch(e){}
+    setUpdatingO(false);
+  };
 
   return<div className="fade-in" style={{display:"flex",flexDirection:"column",height:"calc(100vh - 64px)"}}>
     <Toast msg={toast}/>
@@ -1206,7 +1257,7 @@ function MessagesPage({onRead,onGoToOrder,orders=[],setOrders}){
         </div>
       </div>
     ):(
-      <div className="inbox-wrap" style={{display:"flex",flex:1,minHeight:0,borderRadius:12,border:`1px solid ${C.border}`,overflow:"hidden"}}>
+      <div className="inbox-wrap" style={{border:`1px solid ${C.border}`}}>
         {/* Liste */}
         <div className="inbox-users" style={{width:270,flexShrink:0,background:C.surface,borderRight:`1px solid ${C.border}`,overflowY:"auto"}}>
           {sortedUsers.length===0&&<div style={{padding:24,textAlign:"center",color:C.text3,fontSize:13}}>Aucun utilisateur</div>}
@@ -1327,10 +1378,10 @@ function App(){
     <Sidebar page={page} setPage={setPage} onLogout={logout} newCount={newCount} unreadMsg={unreadMsgCount}/>
     <main className="main-content" style={{flex:1}}>
       {page==="dashboard"&&<DashboardPage orders={orders} products={products} setPage={setPage}/>}
-      {page==="orders"&&<OrdersPage orders={orders} setOrders={setOrders} loading={loadO} reload={fetchOrders} selectedOrder={selectedOrder} setSelectedOrder={setSelectedOrder}/>}
-      {page==="clients"&&<ClientsPage orders={orders} setOrders={setOrders}/>}
+      {page==="orders"&&<OrdersPage orders={orders} setOrders={setOrders} products={products} setProducts={setProducts} loading={loadO} reload={fetchOrders} selectedOrder={selectedOrder} setSelectedOrder={setSelectedOrder}/>}
+      {page==="clients"&&<ClientsPage orders={orders} setOrders={setOrders} setProducts={setProducts}/>}
       {page==="catalog"&&<CatalogPage products={products} setProducts={setProducts} loading={loadP} reload={fetchProducts}/>}
-      {page==="messages"&&<MessagesPage onRead={()=>{setUnreadMsgCount(0);pollUnread()}} onGoToOrder={id=>{setSelectedOrder(id);setPage("orders");fetchOrders()}} orders={orders} setOrders={setOrders}/>}
+      {page==="messages"&&<MessagesPage onRead={()=>{setUnreadMsgCount(0);pollUnread()}} onGoToOrder={id=>{setSelectedOrder(id);setPage("orders");fetchOrders()}} orders={orders} setOrders={setOrders} setProducts={setProducts}/>}
       {page==="settings"&&<div className="fade-in" style={{maxWidth:620}}>
         <div style={{fontFamily:"'Bebas Neue'",fontSize:34,letterSpacing:"0.05em",marginBottom:20}}>Paramètres</div>
         <Card style={{marginBottom:14}}>
