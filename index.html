@@ -298,8 +298,6 @@ function LoginPage({onLogin}){
           {err&&<div style={{background:"#ff475715",border:`1px solid ${C.red}44`,borderRadius:8,padding:"10px 14px",fontSize:13,color:C.red}}>{err}</div>}
           <Btn style={{width:"100%",justifyContent:"center",padding:"12px 20px",fontSize:14,marginTop:8}} disabled={loading}>{loading?"Connexion...":"Se connecter →"}</Btn>
         </form>
-        <div style={{marginTop:20,padding:"12px 14px",background:C.surface,borderRadius:8,fontSize:11,color:C.text3}}><span style={{color:C.text2,fontWeight:600}}>Démo :</span> admin@zkpro.fr / zkpro2025</div>
-      </Card>
     </div>
   </div>;
 }
