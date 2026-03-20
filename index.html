@@ -428,7 +428,7 @@ function DashboardPage({orders,products,setPage}){
 
 
 /* ── ORDERS ── */
-function OrdersPage({orders,setOrders,products,setProducts,loading,reload,selectedOrder,setSelectedOrder}){
+function OrdersPage({orders,setOrders,products,setProducts,loading,reload,selectedOrder,setSelectedOrder,getSettings}){
   const [filter,setFilter]=useState("tous");
   const [search,setSearch]=useState("");
   const [sort,setSort]=useState("date_desc");
@@ -438,6 +438,8 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
   const [dateTo,setDateTo]=useState("");
   const [note,setNote]=useState("");
   const [savingNote,setSavingNote]=useState(false);
+  const [bulkSelected,setBulkSelected]=useState([]);
+  const [bulkUpdating,setBulkUpdating]=useState(false);
 
   useEffect(()=>{
     if(selectedOrder&&orders.length>0){const o=orders.find(x=>x.id===selectedOrder);if(o){setSelected(o);setNote(o.note||"");if(setSelectedOrder)setSelectedOrder(null)}}
@@ -484,7 +486,35 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
         }
       }
     }catch(e){alert(e.message)}
+
+    // Message automatique bot si activé dans paramètres
+    try{
+      const s=getSettings?getSettings():{};
+      const order=orders.find(o=>o.id===id);
+      if(order?.telegram_id){
+        if(status==="expédié"&&s.msgExpédie){
+          const msg=`📦 *Commande ${id} expédiée !*\n\nVotre commande est en route 🚚\nVous recevrez votre colis dans les prochains jours.\n\nMerci pour votre confiance ! 🙏`;
+          await fetch(`${TG_API}/sendMessage`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chat_id:order.telegram_id,text:msg,parse_mode:"Markdown"})});
+          await fetch(`${SB_URL}/rest/v1/bot_messages`,{method:"POST",headers:{...SBH,"Prefer":"return=minimal"},body:JSON.stringify({telegram_id:order.telegram_id,direction:"out",text:`📦 Commande ${id} expédiée`,created_at:new Date().toISOString()})});
+        }
+        if(status==="payé"&&s.msgPaye){
+          const msg=`✅ *Paiement confirmé — ${id}*\n\nNous avons bien reçu votre paiement.\nVotre commande est en cours de préparation 📦\n\nMerci ! 🙏`;
+          await fetch(`${TG_API}/sendMessage`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chat_id:order.telegram_id,text:msg,parse_mode:"Markdown"})});
+          await fetch(`${SB_URL}/rest/v1/bot_messages`,{method:"POST",headers:{...SBH,"Prefer":"return=minimal"},body:JSON.stringify({telegram_id:order.telegram_id,direction:"out",text:`✅ Paiement confirmé ${id}`,created_at:new Date().toISOString()})});
+        }
+      }
+    }catch(e){}
     setUpdating(false);
+  };
+
+  // Multi-sélection : changer le statut de plusieurs commandes
+  const bulkUpdateStatus=async(status)=>{
+    if(!bulkSelected.length)return;
+    if(!confirm(`Passer ${bulkSelected.length} commande(s) au statut "${STATUS[status].label}" ?`))return;
+    setBulkUpdating(true);
+    for(const id of bulkSelected){await updateStatus(id,status).catch(()=>{});}
+    setBulkSelected([]);
+    setBulkUpdating(false);
   };
 
   const saveNote=async()=>{
@@ -568,16 +598,25 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
       <span style={{marginLeft:"auto",fontSize:12,color:C.text3}}>{filtered.length} · {fmt(totalFiltered)}</span>
     </div>
 
+    {/* Barre actions multi-sélection */}
+    {bulkSelected.length>0&&<div style={{padding:"10px 14px",background:C.accentDim,border:`1px solid ${C.accentMid}`,borderRadius:9,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+      <span style={{fontSize:13,color:C.accent,fontWeight:600}}>{bulkSelected.length} sélectionné{bulkSelected.length>1?"s":""}</span>
+      {Object.entries(STATUS).map(([key,cfg])=><button key={key} onClick={()=>bulkUpdateStatus(key)} disabled={bulkUpdating} style={{padding:"4px 10px",borderRadius:6,fontSize:11,fontWeight:600,cursor:"pointer",border:`1px solid ${cfg.color}`,background:cfg.bg,color:cfg.color,fontFamily:"'DM Sans',sans-serif",opacity:bulkUpdating?0.5:1}}>{cfg.label}</button>)}
+      <button onClick={()=>setBulkSelected([])} style={{marginLeft:"auto",background:"none",border:"none",color:C.text3,cursor:"pointer",fontSize:14}}>✕ Annuler</button>
+    </div>}
+
     {loading?<div style={{padding:60,display:"flex",justifyContent:"center"}}><div className="spinner"/></div>:
     <div style={{display:"flex",gap:14,flexWrap:"wrap"}}>
       <div style={{flex:1,minWidth:280,overflow:"auto"}}>
         <Card style={{padding:0,overflow:"hidden"}}>
           <table style={{width:"100%",borderCollapse:"collapse",minWidth:500}}>
             <thead><tr style={{borderBottom:`1px solid ${C.border}`,background:C.surface}}>
+              <th style={{padding:"10px 10px",width:36}}><input type="checkbox" onChange={e=>setBulkSelected(e.target.checked?paginated.map(o=>o.id):[])} checked={paginated.length>0&&paginated.every(o=>bulkSelected.includes(o.id))}/></th>
               {["ID","Client","Date","Total","Statut","Action"].map((h,i)=><th key={h} className={i>=2&&i<=3?"hide-mobile":""} style={{padding:"10px 14px",textAlign:"left",fontSize:10,color:C.text3,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",whiteSpace:"nowrap"}}>{h}</th>)}
             </tr></thead>
             <tbody>
-              {paginated.map((o,i)=><tr key={o.id} onClick={()=>setSelected(selected?.id===o.id?null:o)} className="row-hover" style={{borderBottom:i<paginated.length-1?`1px solid ${C.border}`:"none",background:selected?.id===o.id?C.accentDim:"transparent",transition:"background .1s"}}>
+              {paginated.map((o,i)=><tr key={o.id} onClick={()=>setSelected(selected?.id===o.id?null:o)} className="row-hover" style={{borderBottom:i<paginated.length-1?`1px solid ${C.border}`:"none",background:bulkSelected.includes(o.id)?C.accentDim:selected?.id===o.id?C.accentDim:"transparent",transition:"background .1s"}}>
+                <td style={{padding:"11px 10px"}} onClick={e=>e.stopPropagation()}><input type="checkbox" checked={bulkSelected.includes(o.id)} onChange={e=>setBulkSelected(prev=>e.target.checked?[...prev,o.id]:prev.filter(x=>x!==o.id))}/></td>
                 <td style={{padding:"11px 14px",fontFamily:"'JetBrains Mono'",fontSize:11,color:C.accent,whiteSpace:"nowrap"}}>{o.id}</td>
                 <td style={{padding:"11px 14px",fontSize:13}}>{o.telegram_user}</td>
                 <td className="hide-mobile" style={{padding:"11px 14px",fontSize:11,color:C.text3,whiteSpace:"nowrap"}}>{new Date(o.created_at).toLocaleDateString("fr-FR")}</td>
@@ -1033,7 +1072,7 @@ function CatalogPage({products,setProducts,loading,reload}){
 }
 
 /* ── MESSAGES ── */
-function MessagesPage({onRead,onGoToOrder,orders=[],setOrders}){
+function MessagesPage({onRead,onGoToOrder,orders=[],setOrders,setProducts,getSettings}){
   const [users,setUsers]=useState([]);
   const [messages,setMessages]=useState([]);
   const [selected,setSelected]=useState(null);
@@ -1214,6 +1253,18 @@ function MessagesPage({onRead,onGoToOrder,orders=[],setOrders}){
         if(status==="annulé"&&prevStatus!=="nouveau"&&prevStatus!=="annulé"){
           for(const item of items){const prod=await sbGet("products",`?name=eq.${encodeURIComponent(item.name)}&select=id,stock`).catch(()=>[]);if(prod[0])await sbPatch("products",prod[0].id,{stock:prod[0].stock+item.qty}).catch(()=>{})}
         }
+        // Messages auto
+        const s=getSettings?getSettings():{};
+        if(order.telegram_id){
+          if(status==="expédié"&&s.msgExpédie){
+            const msg=`📦 *Commande ${id} expédiée !*\n\nVotre commande est en route 🚚\nMerci pour votre confiance ! 🙏`;
+            await fetch(`${TG_API}/sendMessage`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chat_id:order.telegram_id,text:msg,parse_mode:"Markdown"})}).catch(()=>{});
+          }
+          if(status==="payé"&&s.msgPaye){
+            const msg=`✅ *Paiement confirmé — ${id}*\n\nNous avons bien reçu votre paiement.\nVotre commande est en cours de préparation 📦`;
+            await fetch(`${TG_API}/sendMessage`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chat_id:order.telegram_id,text:msg,parse_mode:"Markdown"})}).catch(()=>{});
+          }
+        }
       }
     }catch(e){}
     setUpdatingO(false);
@@ -1360,6 +1411,120 @@ function MessagesPage({onRead,onGoToOrder,orders=[],setOrders}){
   </div>
 }
 
+/* ── SETTINGS PAGE ── */
+function SettingsPage({orders,logout}){
+  const [settings,setSettings]=useState(()=>{
+    try{return JSON.parse(localStorage.getItem("zkpro_settings")||"{}")}catch{return{}}
+  });
+  const [saved,setSaved]=useState(false);
+  const [notifStatus,setNotifStatus]=useState(Notification?.permission||"default");
+
+  const setS=(k,v)=>{
+    const next={...settings,[k]:v};
+    setSettings(next);
+    localStorage.setItem("zkpro_settings",JSON.stringify(next));
+    setSaved(true);
+    setTimeout(()=>setSaved(false),1500);
+  };
+
+  const requestNotif=async()=>{
+    if(!("Notification" in window)){alert("Navigateur non supporté");return;}
+    const p=await Notification.requestPermission();
+    setNotifStatus(p);
+    if(p==="granted")new Notification("ZK PRO",{body:"🔔 Notifications activées !"});
+  };
+
+  const field=(label,key,placeholder,note)=><div style={{marginBottom:14}}>
+    <label style={{display:"block",fontSize:12,fontWeight:600,color:C.text2,letterSpacing:"0.05em",textTransform:"uppercase",marginBottom:5}}>{label}</label>
+    <input value={settings[key]||""} onChange={e=>setS(key,e.target.value)} placeholder={placeholder}
+      style={{width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:14,padding:"9px 13px",outline:"none",boxSizing:"border-box"}}
+      onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+    {note&&<div style={{fontSize:11,color:C.text3,marginTop:4}}>{note}</div>}
+  </div>;
+
+  return<div className="fade-in" style={{maxWidth:620}}>
+    <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
+      <div style={{fontFamily:"'Bebas Neue'",fontSize:34,letterSpacing:"0.05em"}}>Paramètres</div>
+      {saved&&<span style={{fontSize:12,color:C.green,fontWeight:600}}>✓ Sauvegardé</span>}
+    </div>
+
+    {/* Boutique */}
+    <Card style={{marginBottom:14}}>
+      <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em",marginBottom:16}}>🛒 Boutique</div>
+      {field("Lien @contact (Telegram)","willyHandle","wilIIly","Pseudo Telegram où les commandes sont envoyées (sans @)")}
+      {field("Livraison offerte dès (€)","livraisonMin","200","Montant minimum pour livraison gratuite")}
+      {field("Prix livraison (€)","livraisonPrix","9.90","Frais de port si sous le minimum")}
+      {field("Message de bienvenue bot","welcomeMsg","👋 Bienvenue chez ZK PRO...","Message envoyé aux nouveaux utilisateurs du bot")}
+    </Card>
+
+    {/* Notifications */}
+    <Card style={{marginBottom:14}}>
+      <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em",marginBottom:14}}>🔔 Notifications</div>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 14px",background:C.surface,borderRadius:8,marginBottom:8}}>
+        <div>
+          <div style={{fontSize:13,fontWeight:600}}>Notifications navigateur</div>
+          <div style={{fontSize:11,color:C.text3,marginTop:2}}>
+            {notifStatus==="granted"?"✅ Activées — nouveaux messages notifiés":notifStatus==="denied"?"❌ Bloquées — autoriser dans les réglages navigateur":"En attente d'autorisation"}
+          </div>
+        </div>
+        {notifStatus!=="granted"&&<Btn onClick={requestNotif} style={{fontSize:12,padding:"6px 12px"}}>Activer</Btn>}
+      </div>
+      <div style={{padding:"10px 14px",background:C.surface,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div>
+          <div style={{fontSize:13,fontWeight:600}}>Notif nouveaux messages</div>
+          <div style={{fontSize:11,color:C.text3,marginTop:2}}>Alerte quand un client écrit</div>
+        </div>
+        <div onClick={()=>setS("notifMessages",!settings.notifMessages)} style={{width:40,height:22,borderRadius:11,background:settings.notifMessages?C.accent:C.border,cursor:"pointer",position:"relative",transition:"background .2s"}}>
+          <div style={{position:"absolute",top:2,left:settings.notifMessages?20:2,width:18,height:18,borderRadius:"50%",background:"#fff",transition:"left .2s"}}/>
+        </div>
+      </div>
+    </Card>
+
+    {/* Messages auto */}
+    <Card style={{marginBottom:14}}>
+      <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em",marginBottom:14}}>🤖 Messages automatiques</div>
+      <div style={{padding:"10px 14px",background:C.surface,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+        <div>
+          <div style={{fontSize:13,fontWeight:600}}>Message "Payé" reçu</div>
+          <div style={{fontSize:11,color:C.text3,marginTop:2}}>Confirme le paiement au client</div>
+        </div>
+        <div onClick={()=>setS("msgPaye",!settings.msgPaye)} style={{width:40,height:22,borderRadius:11,background:settings.msgPaye?C.accent:C.border,cursor:"pointer",position:"relative",transition:"background .2s"}}>
+          <div style={{position:"absolute",top:2,left:settings.msgPaye?20:2,width:18,height:18,borderRadius:"50%",background:"#fff",transition:"left .2s"}}/>
+        </div>
+      </div>
+      <div style={{padding:"10px 14px",background:C.surface,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div>
+          <div style={{fontSize:13,fontWeight:600}}>Message "Expédié" envoyé</div>
+          <div style={{fontSize:11,color:C.text3,marginTop:2}}>Notifie le client que son colis est parti</div>
+        </div>
+        <div onClick={()=>setS("msgExpédie",!settings.msgExpédie)} style={{width:40,height:22,borderRadius:11,background:settings.msgExpédie?C.accent:C.border,cursor:"pointer",position:"relative",transition:"background .2s"}}>
+          <div style={{position:"absolute",top:2,left:settings.msgExpédie?20:2,width:18,height:18,borderRadius:"50%",background:"#fff",transition:"left .2s"}}/>
+        </div>
+      </div>
+    </Card>
+
+    {/* Liens rapides */}
+    <Card style={{marginBottom:14}}>
+      <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em",marginBottom:14}}>🔗 Liens rapides</div>
+      {[{label:"🛒 Boutique Telegram",url:"https://anserfj.github.io/telegram-shop/",sub:"anserfj.github.io/telegram-shop"},{label:"🗄️ Supabase",url:"https://supabase.com/dashboard/project/hyigrnuoojusixzahjvq",sub:"hyigrnuoojusixzahjvq"},{label:"⚙️ Cloudflare Worker",url:"https://dash.cloudflare.com",sub:"Bot webhook"}].map(l=>
+      <div key={l.url} style={{padding:"11px 14px",background:C.surface,borderRadius:8,display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+        <div><div style={{fontSize:13,fontWeight:600}}>{l.label}</div><div style={{fontSize:11,color:C.text3,fontFamily:"'JetBrains Mono'",marginTop:1}}>{l.sub}</div></div>
+        <Btn variant="ghost" style={{fontSize:11,padding:"5px 12px"}} onClick={()=>window.open(l.url,"_blank")}>Ouvrir</Btn>
+      </div>)}
+    </Card>
+
+    {/* Compte */}
+    <Card>
+      <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em",marginBottom:14}}>👤 Compte</div>
+      <div style={{fontSize:13,color:C.text2,marginBottom:12}}>Connecté en tant que <strong style={{color:C.text1}}>admin@zkpro.fr</strong></div>
+      <div style={{display:"flex",gap:10}}>
+        <button onClick={()=>window.location.reload()} style={{padding:"9px 18px",borderRadius:8,background:"transparent",border:`1px solid ${C.border}`,color:C.text2,fontSize:13,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>🔄 Recharger</button>
+        <button onClick={logout} style={{padding:"9px 18px",borderRadius:8,background:"transparent",border:`1px solid ${C.red}44`,color:C.red,fontSize:13,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Déconnexion</button>
+      </div>
+    </Card>
+  </div>;
+}
+
 /* ── APP ── */
 function App(){
   const [logged,setLogged]=useState(()=>localStorage.getItem("zkpro_logged")==="1");
@@ -1374,11 +1539,25 @@ function App(){
   const login=()=>{localStorage.setItem("zkpro_logged","1");setLogged(true)};
   const logout=()=>{localStorage.removeItem("zkpro_logged");setLogged(false)};
 
+  const getSettings=()=>{try{return JSON.parse(localStorage.getItem("zkpro_settings")||"{}")}catch{return{}}};
+
   const fetchOrders=async()=>{setLoadO(true);try{setOrders(await sbGet("orders","?order=created_at.desc"))}catch(e){console.error(e)}setLoadO(false)};
   const fetchProducts=async()=>{setLoadP(true);try{setProducts(await sbGet("products","?order=id.asc"))}catch(e){console.error(e)}setLoadP(false)};
 
   const pollUnread=async()=>{
-    try{const msgs=await sbGet("bot_messages","?direction=eq.in&order=created_at.desc&limit=200");const rids=JSON.parse(localStorage.getItem("zkpro_read_ids")||"[]");setUnreadMsgCount(msgs.filter(m=>!rids.includes(m.id)).length)}catch(e){}
+    try{
+      const msgs=await sbGet("bot_messages","?direction=eq.in&order=created_at.desc&limit=200");
+      const rids=JSON.parse(localStorage.getItem("zkpro_read_ids")||"[]");
+      const unread=msgs.filter(m=>!rids.includes(m.id));
+      const prevCount=unreadMsgCount;
+      setUnreadMsgCount(unread.length);
+      // Notification browser si nouveau message
+      const s=getSettings();
+      if(s.notifMessages&&s.notifMessages&&Notification?.permission==="granted"&&unread.length>prevCount){
+        const newest=unread[0];
+        new Notification("ZK PRO — Nouveau message",{body:newest.text||"📷 Média",icon:"https://anserfj.github.io/telegram-shop/LOGO_ZK_PRO.jpg"});
+      }
+    }catch(e){}
   };
 
   useEffect(()=>{if(logged){fetchOrders();fetchProducts();pollUnread()}},[logged]);
@@ -1392,26 +1571,11 @@ function App(){
     <Sidebar page={page} setPage={setPage} onLogout={logout} newCount={newCount} unreadMsg={unreadMsgCount}/>
     <main className="main-content" style={{flex:1}}>
       {page==="dashboard"&&<DashboardPage orders={orders} products={products} setPage={setPage}/>}
-      {page==="orders"&&<OrdersPage orders={orders} setOrders={setOrders} products={products} setProducts={setProducts} loading={loadO} reload={fetchOrders} selectedOrder={selectedOrder} setSelectedOrder={setSelectedOrder}/>}
+      {page==="orders"&&<OrdersPage orders={orders} setOrders={setOrders} products={products} setProducts={setProducts} loading={loadO} reload={fetchOrders} selectedOrder={selectedOrder} setSelectedOrder={setSelectedOrder} getSettings={getSettings}/>}
       {page==="clients"&&<ClientsPage orders={orders} setOrders={setOrders} setProducts={setProducts}/>}
       {page==="catalog"&&<CatalogPage products={products} setProducts={setProducts} loading={loadP} reload={fetchProducts}/>}
-      {page==="messages"&&<MessagesPage onRead={()=>{setUnreadMsgCount(0);pollUnread()}} onGoToOrder={id=>{setSelectedOrder(id);setPage("orders");fetchOrders()}} orders={orders} setOrders={setOrders} setProducts={setProducts}/>}
-      {page==="settings"&&<div className="fade-in" style={{maxWidth:620}}>
-        <div style={{fontFamily:"'Bebas Neue'",fontSize:34,letterSpacing:"0.05em",marginBottom:20}}>Paramètres</div>
-        <Card style={{marginBottom:14}}>
-          <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em",marginBottom:14}}>Liens rapides</div>
-          {[{label:"🛒 Boutique Telegram",url:"https://anserfj.github.io/telegram-shop/",sub:"anserfj.github.io/telegram-shop"},{label:"🗄️ Supabase Console",url:"https://supabase.com/dashboard/project/hyigrnuoojusixzahjvq",sub:"hyigrnuoojusixzahjvq.supabase.co"},{label:"⚙️ Cloudflare Worker",url:"https://dash.cloudflare.com",sub:"Bot webhook"}].map(l=>
-          <div key={l.url} style={{padding:"12px 14px",background:C.surface,borderRadius:8,display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-            <div><div style={{fontSize:13,fontWeight:600}}>{l.label}</div><div style={{fontSize:11,color:C.text3,fontFamily:"'JetBrains Mono'",marginTop:1}}>{l.sub}</div></div>
-            <Btn variant="ghost" style={{fontSize:11,padding:"5px 12px"}} onClick={()=>window.open(l.url,"_blank")}>Ouvrir</Btn>
-          </div>)}
-        </Card>
-        <Card>
-          <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em",marginBottom:14}}>Compte</div>
-          <div style={{fontSize:13,color:C.text2,marginBottom:12}}>Connecté en tant que <strong style={{color:C.text1}}>admin@zkpro.fr</strong></div>
-          <button onClick={logout} style={{padding:"9px 18px",borderRadius:8,background:"transparent",border:`1px solid ${C.red}44`,color:C.red,fontSize:13,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Déconnexion</button>
-        </Card>
-      </div>}
+      {page==="messages"&&<MessagesPage onRead={()=>{setUnreadMsgCount(0);pollUnread()}} onGoToOrder={id=>{setSelectedOrder(id);setPage("orders");fetchOrders()}} orders={orders} setOrders={setOrders} setProducts={setProducts} getSettings={getSettings}/>}
+      {page==="settings"&&<SettingsPage orders={orders} logout={logout}/>}
     </main>
   </div>
 }
