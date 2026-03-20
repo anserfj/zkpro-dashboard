@@ -285,7 +285,7 @@ function LoginPage({onLogin}){
 }
 
 /* ── SIDEBAR ── */
-function Sidebar({page,setPage,onLogout,newCount}){
+function Sidebar({page,setPage,onLogout,newCount,unreadMsg}){
   const nav=[{id:"dashboard",icon:"◈",label:"Dashboard"},{id:"orders",icon:"≡",label:"Commandes"},{id:"catalog",icon:"⊞",label:"Catalogue"},{id:"messages",icon:"✉",label:"Messages"},{id:"settings",icon:"⊙",label:"Paramètres"}];
   return <div style={{width:220,minHeight:"100vh",background:C.surface,borderRight:`1px solid ${C.border}`,display:"flex",flexDirection:"column",position:"fixed",left:0,top:0,bottom:0,zIndex:100}}>
     <div style={{padding:"24px 20px",borderBottom:`1px solid ${C.border}`}}><div style={{fontFamily:"'Bebas Neue'",fontSize:28,color:C.accent,letterSpacing:"0.1em"}}>ZK PRO</div><div style={{fontSize:10,color:C.text3,letterSpacing:"0.15em",textTransform:"uppercase",marginTop:2}}>Admin Panel</div></div>
@@ -294,6 +294,7 @@ function Sidebar({page,setPage,onLogout,newCount}){
       {nav.map(item=><button key={item.id} onClick={()=>setPage(item.id)} style={{display:"flex",alignItems:"center",gap:12,width:"100%",padding:"11px 12px",borderRadius:8,marginBottom:4,background:page===item.id?C.accentDim:"transparent",border:page===item.id?`1px solid ${C.accentMid}`:"1px solid transparent",color:page===item.id?C.accent:C.text2,fontSize:14,fontWeight:500,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}} onMouseEnter={e=>page!==item.id&&(e.currentTarget.style.background="#ffffff08")} onMouseLeave={e=>page!==item.id&&(e.currentTarget.style.background="transparent")}>
         <span style={{fontSize:18,lineHeight:1,fontFamily:"monospace"}}>{item.icon}</span><span>{item.label}</span>
         {item.id==="orders"&&newCount>0&&<span style={{marginLeft:"auto",background:C.accent,color:C.bg,borderRadius:10,fontSize:10,fontWeight:700,padding:"1px 6px"}}>{newCount}</span>}
+        {item.id==="messages"&&unreadMsg>0&&<span style={{marginLeft:"auto",background:C.red,color:"#fff",borderRadius:10,fontSize:10,fontWeight:700,padding:"1px 6px"}}>{unreadMsg}</span>}
       </button>)}
     </nav>
     <div style={{padding:"16px 12px",borderTop:`1px solid ${C.border}`}}>
@@ -626,7 +627,7 @@ async function sendTgMessage(chatId, text){
   return data?.result?.message_id || null;
 }
 
-function MessagesPage(){
+function MessagesPage({onRead}){
   const [users, setUsers]       = useState([]);
   const [messages, setMessages] = useState([]);
   const [selected, setSelected] = useState(null); // user selectionné pour conversation
@@ -649,6 +650,7 @@ function MessagesPage(){
       ]);
       setUsers(u);
       setMessages(m);
+      markAllRead(m); // marquer tout comme lu dès qu'on est sur la page
     } catch(e){ console.error(e); }
     if(!silent) setLoading(false);
   };
@@ -745,7 +747,34 @@ function MessagesPage(){
     showToast("🗑️ Broadcast supprimé");
   };
 
-  const displayName = u => u.username ? `@${u.username}` : `${u.first_name||""}${u.last_name?` ${u.last_name}`:""}`.trim() || `User ${u.id}`;
+  // Marquer tous les messages comme lus quand on ouvre la page
+  const markAllRead = (msgs) => {
+    const inMsgs = msgs.filter(m=>m.direction==="in");
+    const ids = inMsgs.map(m=>m.id);
+    const existing = JSON.parse(localStorage.getItem("zkpro_read_ids")||"[]");
+    const merged = [...new Set([...existing, ...ids])].slice(-1000); // garder max 1000
+    localStorage.setItem("zkpro_read_ids", JSON.stringify(merged));
+    if(onRead) onRead();
+  };
+
+  // Marquer les messages d'un user comme lus quand on ouvre la conversation
+  const markUserRead = (uid, msgs) => {
+    const userIn = msgs.filter(m=>m.telegram_id===uid&&m.direction==="in").map(m=>m.id);
+    const existing = JSON.parse(localStorage.getItem("zkpro_read_ids")||"[]");
+    const merged = [...new Set([...existing, ...userIn])].slice(-1000);
+    localStorage.setItem("zkpro_read_ids", JSON.stringify(merged));
+    if(onRead) onRead();
+  };
+
+  // Marquer comme lus automatiquement quand une conversation est ouverte
+  useEffect(()=>{
+    if(selected && messages.length > 0){
+      markUserRead(selected.id, messages);
+    }
+  },[selected, messages]);
+
+  const readIds = () => JSON.parse(localStorage.getItem("zkpro_read_ids")||"[]");
+  const unreadForUser = (uid) => messages.filter(m=>m.telegram_id===uid&&m.direction==="in"&&!readIds().includes(m.id)).length;
   const lastMsg = u => {
     const msgs = messages.filter(m=>m.telegram_id===u.id);
     if(!msgs.length) return null;
@@ -830,13 +859,14 @@ function MessagesPage(){
           {users.map(u=>{
             const last = lastMsg(u);
             const isSelected = selected?.id===u.id;
-            return <div key={u.id} onClick={()=>setSelected(u)}
+            const unread = unreadForUser(u.id);
+            return <div key={u.id} onClick={()=>{ setSelected(u); markUserRead(u.id, messages); }}
               style={{padding:"12px 16px",cursor:"pointer",borderBottom:`1px solid ${C.border}`,background:isSelected?C.accentDim:"transparent",borderLeft:isSelected?`3px solid ${C.accent}`:"3px solid transparent"}}
               onMouseEnter={e=>!isSelected&&(e.currentTarget.style.background="#ffffff06")}
               onMouseLeave={e=>!isSelected&&(e.currentTarget.style.background="transparent")}>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:3}}>
                 <span style={{fontSize:13,fontWeight:600,color:isSelected?C.accent:C.text1}}>{displayName(u)}</span>
-                {unread(u)>0&&<span style={{background:C.accent,color:C.bg,borderRadius:10,fontSize:10,fontWeight:700,padding:"1px 6px"}}>{unread(u)}</span>}
+                {unread>0&&<span style={{background:C.red,color:"#fff",borderRadius:10,fontSize:10,fontWeight:700,padding:"1px 6px"}}>{unread}</span>}
               </div>
               {last&&<div style={{fontSize:11,color:C.text3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{last.direction==="out"?"✓ ":""}{last.text}</div>}
               <div style={{fontSize:10,color:C.text3,marginTop:2}}>{new Date(u.last_seen).toLocaleDateString("fr-FR")}</div>
@@ -898,22 +928,35 @@ function App(){
   const [products,setProducts]=useState([]);
   const [loadO,setLoadO]=useState(false);
   const [loadP,setLoadP]=useState(false);
+  const [unreadMsgCount,setUnreadMsgCount]=useState(0);
 
   const fetchOrders=async()=>{setLoadO(true);try{setOrders(await sbGet("orders","?order=created_at.desc"));}catch(e){console.error(e);}setLoadO(false);};
   const fetchProducts=async()=>{setLoadP(true);try{setProducts(await sbGet("products","?order=id.asc"));}catch(e){console.error(e);}setLoadP(false);};
 
-  useEffect(()=>{if(logged){fetchOrders();fetchProducts();}}, [logged]);
+  // Poll messages non lus toutes les 5s pour le badge sidebar
+  const pollUnread = async () => {
+    try {
+      const msgs = await sbGet("bot_messages","?direction=eq.in&order=created_at.desc&limit=200");
+      const readIds = JSON.parse(localStorage.getItem("zkpro_read_ids")||"[]");
+      const unread = msgs.filter(m=>!readIds.includes(m.id)).length;
+      setUnreadMsgCount(unread);
+    } catch(e){}
+  };
+
+  useEffect(()=>{if(logged){fetchOrders();fetchProducts();pollUnread();}}, [logged]);
   useEffect(()=>{if(!logged)return;const t=setInterval(fetchOrders,30000);return()=>clearInterval(t);},[logged]);
+  useEffect(()=>{if(!logged)return;const t=setInterval(pollUnread,5000);return()=>clearInterval(t);},[logged]);
 
   const newCount=orders.filter(o=>o.status==="nouveau").length;
   if(!logged)return <LoginPage onLogin={()=>setLogged(true)}/>;
   return <div style={{display:"flex",minHeight:"100vh"}}>
-    <Sidebar page={page} setPage={setPage} onLogout={()=>setLogged(false)} newCount={newCount}/>
+    <Sidebar page={page} setPage={setPage} onLogout={()=>setLogged(false)} newCount={newCount} unreadMsg={unreadMsgCount}/>
     <main style={{marginLeft:220,flex:1,padding:"32px 28px",maxWidth:"calc(100vw - 220px)"}}>
       {page==="dashboard"&&<DashboardPage orders={orders} setPage={setPage} loading={loadO}/>}
       {page==="orders"&&<OrdersPage orders={orders} setOrders={setOrders} loading={loadO} reload={fetchOrders}/>}
       {page==="catalog"&&<CatalogPage products={products} setProducts={setProducts} loading={loadP} reload={fetchProducts}/>}
-      {page==="messages"&&<MessagesPage/>}<div className="fade-in" style={{maxWidth:680}}>
+      {page==="messages"&&<MessagesPage onRead={()=>{setUnreadMsgCount(0);pollUnread();}}/>}
+      {page==="settings"&&<div className="fade-in" style={{maxWidth:680}}>
         <div style={{fontFamily:"'Bebas Neue'",fontSize:36,letterSpacing:"0.05em",marginBottom:24}}>Paramètres</div>
         <Card>
           <div style={{fontFamily:"'Bebas Neue'",fontSize:20,letterSpacing:"0.05em",marginBottom:16}}>Liens rapides</div>
