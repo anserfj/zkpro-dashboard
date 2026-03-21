@@ -852,7 +852,7 @@ function ClientsPage({orders,setOrders}){
 }
 
 /* ── CATALOG ── */
-const EMPTY={name:"",cat:"puff",emoji:"💨",price:"",compare_price:"",unit:"/ unité",min_qty:"10",badge:"",stock:"",low_stock_alert:"50",gouts:[],medias:[]};
+const EMPTY={name:"",cat:"puff",emoji:"💨",price:"",compare_price:"",unit:"/ unité",min_qty:"10",badge:"",stock:"",low_stock_alert:"50",description:"",gouts:[],medias:[]};
 
 function CatalogPage({products,setProducts,loading,reload}){
   const [filter,setFilter]=useState("tous");
@@ -874,7 +874,7 @@ function CatalogPage({products,setProducts,loading,reload}){
     if(p.video_url)em.push({url:p.video_url,type:"video"});
     const gal=Array.isArray(p.gallery)?p.gallery:(p.gallery?JSON.parse(p.gallery||"[]"):[]);
     gal.forEach(url=>{if(url&&!em.find(m=>m.url===url))em.push({url,type:isVideo(url)?"video":"image"})});
-    setForm({name:p.name,cat:p.cat,emoji:p.emoji||"💨",price:String(p.price),compare_price:String(p.compare_price||""),unit:p.unit,min_qty:String(p.min_qty),badge:p.badge||"",stock:String(p.stock),low_stock_alert:String(p.low_stock_alert||"50"),gouts:Array.isArray(p.gouts)?p.gouts:(p.gouts?JSON.parse(p.gouts):[]),medias:em});
+    setForm({name:p.name,cat:p.cat,emoji:p.emoji||"💨",price:String(p.price),compare_price:String(p.compare_price||""),unit:p.unit,min_qty:String(p.min_qty),badge:p.badge||"",stock:String(p.stock),low_stock_alert:String(p.low_stock_alert||"50"),description:p.description||"",gouts:Array.isArray(p.gouts)?p.gouts:(p.gouts?JSON.parse(p.gouts):[]),medias:em});
     setModal(p);
   };
 
@@ -884,7 +884,7 @@ function CatalogPage({products,setProducts,loading,reload}){
     const firstImg=form.medias.find(m=>m.type==="image");
     const firstVid=form.medias.find(m=>m.type==="video");
     const gallery=form.medias.filter(m=>m!==firstImg&&m!==firstVid).map(m=>m.url);
-    const body={name:form.name,cat:form.cat,emoji:form.emoji,price:parseFloat(form.price),compare_price:form.compare_price?parseFloat(form.compare_price):null,unit:form.unit,min_qty:parseInt(form.min_qty)||1,stock:parseInt(form.stock)||0,low_stock_alert:parseInt(form.low_stock_alert)||50,badge:form.badge||null,gouts:form.gouts,image_url:firstImg?.url||null,video_url:firstVid?.url||null,gallery};
+    const body={name:form.name,cat:form.cat,emoji:form.emoji,price:parseFloat(form.price),compare_price:form.compare_price?parseFloat(form.compare_price):null,unit:form.unit,min_qty:parseInt(form.min_qty)||1,stock:parseInt(form.stock)||0,low_stock_alert:parseInt(form.low_stock_alert)||50,badge:form.badge||null,description:form.description||null,gouts:form.gouts,image_url:firstImg?.url||null,video_url:firstVid?.url||null,gallery};
     try{
       if(modal==="new"){const[r]=await sbPost("products",body);setProducts(prev=>[...prev,r]);showToast("✅ Produit ajouté !")}
       else{await sbPatch("products",modal.id,body);setProducts(prev=>prev.map(p=>p.id===modal.id?{...p,...body,id:modal.id}:p));showToast("✅ Modifié !")}
@@ -1048,6 +1048,15 @@ function CatalogPage({products,setProducts,loading,reload}){
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
             <Sel label="Catégorie" value={form.cat} onChange={v=>setF({cat:v})} options={[{value:"puff",label:"Puff"},{value:"recharge",label:"Recharge"},{value:"accessoire",label:"Accessoire"}]}/>
             <Sel label="Badge" value={form.badge} onChange={v=>setF({badge:v})} options={[{value:"",label:"Aucun"},{value:"new",label:"🆕 Nouveau"},{value:"promo",label:"🔥 Promo"},{value:"top",label:"⭐ Top"},{value:"stock",label:"⚠️ Stock faible"}]}/>
+            <div>
+              <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",color:C.text3,marginBottom:6}}>Description</div>
+              <textarea value={form.description} onChange={e=>setF({description:e.target.value})}
+                placeholder="Description du produit (optionnel)..."
+                rows={3}
+                style={{width:"100%",background:C.bg3,border:`1px solid ${C.border}`,borderRadius:10,color:C.text,fontSize:13,padding:"10px 13px",outline:"none",fontFamily:"'DM Sans',sans-serif",resize:"vertical",boxSizing:"border-box"}}
+                onFocus={e=>e.target.style.borderColor=C.accent}
+                onBlur={e=>e.target.style.borderColor=C.border}/>
+            </div>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
             <Inp label="Prix (€)" type="number" value={form.price} onChange={v=>setF({price:v})} required min="0" note="Prix de vente"/>
